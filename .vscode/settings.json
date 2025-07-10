@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.ipp": "c",
+        "regex": "c",
+        "sstream": "c",
+        "strstream": "c"
+    }
+}

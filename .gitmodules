@@ -1,0 +1,3 @@
+[submodule "modules/whisper/android/src/main/cpp/clblast"]
+	path = modules/whisper/android/src/main/cpp/clblast
+	url = git@github.com:CNugteren/CLBlast.git

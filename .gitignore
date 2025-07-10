@@ -1,0 +1,24 @@
+node_modules/
+.expo/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+.cxx/
+.gradle/
+/ios
+/android
+/dapp-store-build
+/dapp-store-signing-keys
+solana-agent-firebase-adminsdk-fbsvc-71886fab9c.json
+google-services.json
+publishing/
+.env
+
+# macOS
+.DS_Store

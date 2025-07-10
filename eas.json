@@ -1,0 +1,53 @@
+{
+  "cli": {
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "large"
+      },
+      "android": {
+        "resourceClass": "large"
+      }
+    },
+    "development-simulator": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "large"
+      },
+      "android": {
+        "resourceClass": "large"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "ios": {
+        "resourceClass": "large"
+      },
+      "android": {
+        "resourceClass": "large"
+      }
+    },
+    "dapp-store": {
+      "autoIncrement": true,
+      "channel": "production",
+      "android": {
+          "buildType": "apk",
+          "resourceClass": "large"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
