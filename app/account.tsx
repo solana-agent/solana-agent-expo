@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from "react";
-import { StyleSheet, View, Alert, Image, TouchableOpacity } from "react-native";
-import { Button, Text, IconButton, Card, ActivityIndicator } from "react-native-paper";
+import { useEmbeddedSolanaWallet, usePrivy } from "@privy-io/expo";
 import * as Clipboard from 'expo-clipboard';
-import * as ImagePicker from 'expo-image-picker';
-import { usePrivy, useEmbeddedSolanaWallet } from "@privy-io/expo";
-import { PushNotificationService } from '../components/PushNotificationService';
-import { getStoredUsername } from '../config/chatConfig';
 import Constants from "expo-constants";
+import * as ImagePicker from 'expo-image-picker';
+import React, { useEffect, useState } from "react";
+import { Alert, Image, StyleSheet, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Button, IconButton, Text } from "react-native-paper";
+import { PushNotificationService } from '../components/PushNotificationService';
+import { useAppStore } from '../components/Store';
 
 const DARK_NAV = "#18181b";
 const API_URL = Constants.expoConfig?.extra?.apiUrl;
@@ -14,9 +14,7 @@ const API_URL = Constants.expoConfig?.extra?.apiUrl;
 export default function AccountScreen() {
   const { isReady, user, logout, getAccessToken } = usePrivy();
   const wallet = useEmbeddedSolanaWallet();
-  
-  const [username, setUsername] = useState<string | null>(null);
-  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const walletAddress =
@@ -24,15 +22,16 @@ export default function AccountScreen() {
       ? wallet.wallets[0]?.address
       : null;
 
+  const { username, setUsername, avatarUrl, setAvatarUrl } = useAppStore();
+
   // Load username and avatar on component mount
   useEffect(() => {
     const loadUserData = async () => {
       try {
         // Get username from storage or chat config
-        const storedUsername = await getStoredUsername();
-        if (storedUsername) {
-          setUsername(storedUsername);
-          
+        if (username) {
+          setUsername(username);
+
           // Load user avatar from server
           const accessToken = await getAccessToken();
           if (accessToken) {
@@ -47,7 +46,7 @@ export default function AccountScreen() {
             if (response.ok) {
               const userData = await response.json();
               if (userData.avatarUrl) {
-                setAvatarUri(userData.avatarUrl);
+                setAvatarUrl(userData.avatarUrl);
               }
             }
           }
@@ -60,7 +59,7 @@ export default function AccountScreen() {
     if (user) {
       loadUserData();
     }
-  }, [user, getAccessToken]);
+  }, [user, getAccessToken, username, setUsername, setAvatarUrl]);
 
   useEffect(() => {
     const registerPushNotifications = async () => {
@@ -88,7 +87,7 @@ export default function AccountScreen() {
     try {
       // Request permission to access media library
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+
       if (permissionResult.granted === false) {
         Alert.alert("Permission required", "Permission to access photos is required to upload an avatar.");
         return;
@@ -116,7 +115,7 @@ export default function AccountScreen() {
   const uploadAvatar = async (asset: ImagePicker.ImagePickerAsset) => {
     try {
       setUploadingAvatar(true);
-      
+
       const accessToken = await getAccessToken();
       if (!accessToken) {
         throw new Error('No access token available');
@@ -145,7 +144,7 @@ export default function AccountScreen() {
       }
 
       const data = await response.json();
-      setAvatarUri(data.avatarUrl);
+      setAvatarUrl(data.avatarUrl);
       Alert.alert("Success", "Avatar updated successfully!");
 
     } catch (error) {
@@ -180,7 +179,7 @@ export default function AccountScreen() {
                 });
 
                 if (response.ok) {
-                  setAvatarUri(null);
+                  setAvatarUrl(null);
                   Alert.alert("Success", "Avatar removed successfully!");
                 }
               } catch (error) {
@@ -202,13 +201,13 @@ export default function AccountScreen() {
         <View style={styles.accountContent}>
           {/* Avatar Section */}
           <View style={styles.avatarSection}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.avatarContainer}
               onPress={selectAndUploadAvatar}
               disabled={uploadingAvatar}
             >
-              {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={styles.avatar} />
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatar} />
               ) : (
                 <View style={styles.defaultAvatar}>
                   <Text style={styles.avatarPlaceholder}>
@@ -216,13 +215,13 @@ export default function AccountScreen() {
                   </Text>
                 </View>
               )}
-              
+
               {uploadingAvatar && (
                 <View style={styles.uploadingOverlay}>
                   <ActivityIndicator size="small" color="#fff" />
                 </View>
               )}
-              
+
               <View style={styles.cameraIcon}>
                 <IconButton
                   icon="camera"
@@ -233,7 +232,7 @@ export default function AccountScreen() {
               </View>
             </TouchableOpacity>
 
-            {avatarUri && (
+            {avatarUrl && (
               <Button
                 mode="text"
                 onPress={removeAvatar}
@@ -293,7 +292,7 @@ export default function AccountScreen() {
         </View>
       </View>
     );
-    
+
   return (
     <View style={{ flex: 1, backgroundColor: DARK_NAV }}>
       <View style={styles.accountContent}>
@@ -443,7 +442,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   sectionContainer: {
-    width: "100%",
+    alignItems: "flex-start",
     marginBottom: 24,
   },
 });

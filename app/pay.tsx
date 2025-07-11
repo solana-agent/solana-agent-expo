@@ -1,5 +1,5 @@
-import { useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect } from "react";
 
 export default function TransferScreen() {
   const params = useLocalSearchParams();
@@ -19,7 +19,7 @@ export default function TransferScreen() {
     }, 100);
 
     return () => clearTimeout(timeout);
-  }, [params]);
+  }, [params, router]);
 
   return null;
 }

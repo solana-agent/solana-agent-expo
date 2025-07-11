@@ -1,53 +1,47 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-  StyleSheet,
-  View,
-  KeyboardAvoidingView,
-  TextInput,
-  TouchableOpacity,
-  Text as RNText,
+  PrivyUser,
+  useEmbeddedSolanaWallet,
+  usePrivy,
+} from "@privy-io/expo";
+import { useDelegatedActions, useLogin } from "@privy-io/expo/ui";
+import Constants from "expo-constants";
+import * as Network from "expo-network";
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
   ActivityIndicator,
-  SafeAreaView,
+  Alert,
+  AppState,
   FlatList,
   Keyboard,
+  KeyboardAvoidingView,
   Linking,
-  AppState,
-  Alert,
+  Text as RNText,
+  SafeAreaView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import * as Network from "expo-network";
 import Hyperlink from "react-native-hyperlink";
-import { useAppStore } from "../components/Store";
+import NfcManager, { Ndef, NfcEvents } from "react-native-nfc-manager";
 import {
-  usePrivy,
-  useEmbeddedSolanaWallet,
-  PrivyUser,
-} from "@privy-io/expo";
-import { useLogin, useDelegatedActions } from "@privy-io/expo/ui";
-import {
-  Provider as PaperProvider,
   Button,
   Card,
-  Text,
   Modal,
+  Provider as PaperProvider,
   Portal,
+  Text,
 } from "react-native-paper";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import NfcManager, { NfcTech, Ndef, NfcEvents } from "react-native-nfc-manager";
 import { BiometricService } from "../components/BiometricService";
 import { PushNotificationService } from '../components/PushNotificationService';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useAppStore } from "../components/Store";
 import { UsernameSetup } from "../components/UsernameSetup";
-import { 
-  getStoredUsername, 
-  getStoredChatToken,
-  storeUsername, 
-  storeChatToken,
-  clearStoredData, 
+import {
   connectChatUser,
-  storeAvatarUrl,
-  fetchExistingUserData 
+  fetchExistingUserData,
 } from "../config/chatConfig";
-import Constants from "expo-constants";
 
 const API_URL = Constants.expoConfig?.extra?.apiUrl;
 const WS_URL = Constants.expoConfig?.extra?.wsUrl;
@@ -227,7 +221,8 @@ function InfiniteScrollChat({
         }));
         setAllDataFetched(data.page >= data.total_pages);
         setInitialFetchDone(true);
-      } catch (err) {
+      } catch (error) {
+        console.error("Error fetching chat history:", error);
         setFetchError(true);
       } finally {
         setFetchLoading(false);
@@ -290,7 +285,7 @@ function InfiniteScrollChat({
                 onPress={async (url) => {
                   try {
                     await Linking.openURL(url);
-                  } catch {}
+                  } catch { }
                 }}
               >
                 <Text style={styles.agentText}>{item.assistant_message}</Text>
@@ -373,7 +368,7 @@ function parseAgentTransferUri(uri: string): {
 } {
   try {
     console.log('Parsing URI:', uri);
-    
+
     let amount: string | null = null;
     let to: string = "";
     let token: string | null = null;
@@ -387,7 +382,7 @@ function parseAgentTransferUri(uri: string): {
         to = url.searchParams.get("to") || "";
         token = url.searchParams.get("token") || "SOL";
         memo = url.searchParams.get("memo");
-        
+
         console.log('Universal Link - Parsed params:', { amount, to, token, memo });
       } catch (error) {
         console.error('Error parsing Universal Link:', error);
@@ -405,9 +400,9 @@ function parseAgentTransferUri(uri: string): {
     else if (uri.startsWith("agent://pay")) {
       const withoutScheme = uri.replace("agent://", "");
       const [command, queryString] = withoutScheme.split("?");
-      
+
       console.log('Custom scheme - Command:', command, 'Query:', queryString);
-      
+
       if (command !== "pay") {
         return {
           amount: null,
@@ -424,7 +419,7 @@ function parseAgentTransferUri(uri: string): {
       to = params.get("to") || "";
       token = params.get("token") || "SOL";
       memo = params.get("memo");
-      
+
       console.log('Custom scheme - Parsed params:', { amount, to, token, memo });
     }
     else {
@@ -513,12 +508,6 @@ export default function Chat() {
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  // Username and chat connection state
-  const [username, setUsername] = useState<string | null>(null);
-  const [chatConnected, setChatConnected] = useState(false);
-  const [checkingUsername, setCheckingUsername] = useState(true);
-  const [chatConnectAttempted, setChatConnectAttempted] = useState(false);
-
   // Biometric authentication state
   const [isAppActive, setIsAppActive] = useState(true);
   const [requiresBiometric, setRequiresBiometric] = useState(false);
@@ -546,142 +535,117 @@ export default function Chat() {
   // Check if already delegated (calculated after user hook)
   const alreadyDelegated = isWalletDelegated(user);
 
+  const {
+    username,
+    chatToken,
+    chatConnected,
+    chatConnectAttempted,
+    checkingUsername,
+    setUsername,
+    setDisplayName,
+    setChatConnected,
+    setChatConnectAttempted,
+    setCheckingUsername,
+    setChatData,
+    clearChatData
+  } = useAppStore();
+
   // Check for stored username and connect to chat
   useEffect(() => {
     const initializeChat = async () => {
       console.log('=== initializeChat called ===');
-      console.log('isReady:', isReady);
-      console.log('user:', !!user);
-      console.log('chatConnectAttempted:', chatConnectAttempted);
-      
+
       if (!user || chatConnectAttempted) {
-        console.log('=== Skipping chat initialization - no user or already attempted ===');
+        console.log('=== Skipping chat initialization ===');
         setCheckingUsername(false);
         return;
       }
 
       try {
         console.log('=== Starting chat initialization... ===');
-        setChatConnectAttempted(true); // Set this immediately to prevent multiple calls
-        
-        // First, check locally stored data
-        console.log('Checking local storage...');
-        const storedUsername = await getStoredUsername();
-        const storedToken = await getStoredChatToken();
-        
-        console.log('Stored username:', storedUsername);
-        console.log('Stored token exists:', !!storedToken);
-        
-        if (storedUsername && storedToken) {
-          console.log('=== Found stored data, setting username directly (skip connectChatUser) ===');
-          setUsername(storedUsername);
+        setChatConnectAttempted(true);
+
+        // Check if we already have stored data in Zustand
+        if (username && chatToken) {
+          console.log('=== Found stored data in Zustand, using directly ===');
           setChatConnected(true);
           setCheckingUsername(false);
           return;
         }
 
-        // If no valid local data, check server for existing username
+        // If no stored data, check server
         console.log('=== Checking server for existing username... ===');
         const serverData = await fetchExistingUserData(getAccessToken);
-        
-        console.log('=== Server data received ===');
-        console.log('serverData:', JSON.stringify(serverData, null, 2));
-        
+
         if (serverData.username && serverData.chatToken) {
-          console.log('=== Found existing username on server:', serverData.username, '===');
-          
-          // Store the data locally
-          console.log('Storing data locally...');
-          await storeUsername(serverData.username);
-          await storeChatToken(serverData.chatToken);
-          if (serverData.avatarUrl) {
-            await storeAvatarUrl(serverData.avatarUrl);
-          }
-          console.log('Data stored locally');
-          
-          // Only connect to chat if not already connected
+          console.log('=== Found existing username on server ===');
+
+          // Update store with server data
+          setChatData({
+            username: serverData.username,
+            displayName: serverData.displayName,
+            chatToken: serverData.chatToken,
+            avatarUrl: serverData.avatarUrl,
+            chatConnected: false, // Will be set to true after connection
+          });
+
+          // Connect to Stream Chat
           if (!chatConnected) {
-            console.log('Connecting to chat...');
-            await connectChatUser(serverData.username, serverData.chatToken, serverData.avatarUrl || undefined);
+            await connectChatUser(
+              serverData.username,
+              serverData.chatToken,
+              serverData.avatarUrl || undefined,
+              serverData.displayName || undefined
+            );
           }
-          
-          setUsername(serverData.username);
+
           setChatConnected(true);
-          console.log('=== Successfully set up with server data ===');
         } else {
-          console.log('=== No existing username found on server - user needs to create one ===');
-          setUsername(null);
-          setChatConnected(false);
+          console.log('=== No existing username found ===');
+          setChatData({
+            username: null,
+            chatConnected: false,
+          });
         }
       } catch (error) {
         console.error('=== Error initializing chat ===:', error);
-        setUsername(null);
-        setChatConnected(false);
+        setChatData({
+          username: null,
+          chatConnected: false,
+        });
       }
-      
-      console.log('=== Setting checkingUsername to false ===');
+
       setCheckingUsername(false);
     };
 
-    console.log('=== useEffect triggered ===');
-    console.log('Dependencies - isReady:', isReady, 'user:', !!user);
-    
     if (isReady && user && !chatConnectAttempted) {
-      console.log('=== Calling initializeChat ===');
       initializeChat();
     } else if (isReady && !user) {
-      console.log('=== User logged out, cleaning up ===');
-      setCheckingUsername(false);
-      setUsername(null);
-      setChatConnected(false);
-      setChatConnectAttempted(false); // Reset the flag on logout
+      // Clear chat data on logout
+      clearChatData();
     }
-  }, [user, isReady, chatConnectAttempted]);
+  }, [user, isReady, chatConnectAttempted, setCheckingUsername, setChatConnectAttempted, username, chatToken, getAccessToken, setChatConnected, setChatData, chatConnected, clearChatData]);
 
   // Clear data when user logs out
   useEffect(() => {
     if (!user) {
       setUsername(null);
+      setDisplayName(null); // Add this line
       setChatConnected(false);
-      setChatConnectAttempted(false); // Add this line
-      clearStoredData();
+      setChatConnectAttempted(false);
     }
-  }, [user]);
+  }, [setChatConnectAttempted, setChatConnected, setDisplayName, setUsername, user]);
 
   // Handle username creation and chat connection
-  const handleUsernameSet = async (newUsername: string) => {
+  const handleUsernameSet = async (newUsername: string, newDisplayName: string) => {
     try {
-      // Store username first
-      await storeUsername(newUsername);
-      
-      // Get the chat token from your API
-      const accessToken = await getAccessToken();
-      
-      const response = await fetch(`${API_URL}/chat/get-token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          username: newUsername,
-        }),
+      // The API call will handle storing on server
+      // Just update the store after successful creation
+      setChatData({
+        username: newUsername,
+        displayName: newDisplayName,
+        chatConnected: true, // Assume connection succeeds
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to get chat token');
-      }
-
-      const { chatToken } = await response.json();
-      
-      // Store token
-      await storeChatToken(chatToken);
-      
-      // Connect to Stream Chat
-      await connectChatUser(newUsername, chatToken);
-      
-      setUsername(newUsername);
-      setChatConnected(true);
     } catch (error) {
       console.error('Error setting up chat:', error);
       Alert.alert("Error", "Failed to set up chat. Please try again.");
@@ -692,21 +656,21 @@ export default function Chat() {
   useEffect(() => {
     if (params && typeof params.to === "string" && !deepLinkProcessed) {
       console.log('Processing deep link params:', params);
-      
+
       const parsedParams = {
         to: params.to,
         amount: typeof params.amount === "string" ? params.amount : null,
         token: typeof params.token === "string" ? params.token : "SOL",
         memo: typeof params.memo === "string" ? params.memo : null,
       };
-      
+
       setPendingDeepLinkParams(parsedParams);
       setDeepLinkProcessed(true);
-      
+
       // Clear the params from the URL
       router.replace("/");
     }
-  }, [params, deepLinkProcessed, router]);
+  }, [params, deepLinkProcessed]);
 
   // Process pending deep link params after all auth conditions are met
   useEffect(() => {
@@ -796,6 +760,7 @@ export default function Chat() {
       try {
         wsRef.current.send(JSON.stringify({ message }));
       } catch (e) {
+        console.error('Error sending message:', e);
         setProcessing(false);
         setProcessed(true);
         setError("Failed to send message.");
@@ -892,7 +857,7 @@ export default function Chat() {
   // Payment confirmation handlers
   const handleConfirmPayment = () => {
     console.log('Confirm button pressed', { paymentRequest });
-    
+
     if (paymentRequest) {
       // Build the complete command including memo if present
       let command = `Send `;
@@ -901,7 +866,7 @@ export default function Chat() {
       if (paymentRequest.memo) {
         command += ` with a memo of '${paymentRequest.memo}'`;
       }
-      
+
       console.log('Sending command:', command);
       sendTextMessage(command);
       setShowPaymentModal(false);
@@ -983,10 +948,10 @@ export default function Chat() {
           try {
             await NfcManager.setAlertMessageIOS('Ready to scan again');
             await NfcManager.invalidateSessionWithErrorIOS(''); // iOS: end session
-          } catch {}
+          } catch { }
           try {
             await NfcManager.cancelTechnologyRequest(); // Android: clear tag
-          } catch {}
+          } catch { }
 
           // Remove listener and re-register for next scan
           NfcManager.setEventListener(NfcEvents.DiscoverTag, null);
@@ -1076,6 +1041,7 @@ export default function Chat() {
           setProcessed(true);
           setWsStreaming(true);
         } catch (e) {
+          console.error("Error parsing WebSocket message:", e);
           setProcessing(false);
           setProcessed(true);
         }
@@ -1126,7 +1092,7 @@ export default function Chat() {
       showPaymentModal,
       paymentRequest
     });
-    
+
     return (
       <Portal>
         <Modal
@@ -1140,9 +1106,9 @@ export default function Chat() {
           }}
         >
           <Card style={{ backgroundColor: "#27272a" }} key={paymentRequest?.id || Date.now()}>
-            <Card.Title 
-              title="Confirm Payment" 
-              titleStyle={{ color: "#fff", fontSize: 20, fontWeight: "bold" }} 
+            <Card.Title
+              title="Confirm Payment"
+              titleStyle={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}
             />
             <Card.Content>
               <View style={{ marginBottom: 16 }}>
@@ -1167,8 +1133,8 @@ export default function Chat() {
                 <Button
                   mode="outlined"
                   onPress={handleCancelPayment}
-                  style={{ 
-                    flex: 1, 
+                  style={{
+                    flex: 1,
                     borderColor: "#52525b",
                   }}
                   labelStyle={{ color: "#fff" }}
@@ -1178,8 +1144,8 @@ export default function Chat() {
                 <Button
                   mode="contained"
                   onPress={handleConfirmPayment}
-                  style={{ 
-                    flex: 1, 
+                  style={{
+                    flex: 1,
                     backgroundColor: PURPLE_800,
                   }}
                   labelStyle={{ color: "#fff" }}
@@ -1343,7 +1309,7 @@ export default function Chat() {
                 user={user}
                 wallet={wallet}
                 onDelegated={() => {
-                    // This callback might need to trigger a re-check or state update
+                  // This callback might need to trigger a re-check or state update
                 }}
               />
             </Card.Content>
@@ -1357,7 +1323,7 @@ export default function Chat() {
   if (isReady && user && alreadyDelegated && biometricAuthenticated && !username) {
     return (
       <PaperProvider>
-        <UsernameSetup 
+        <UsernameSetup
           onUsernameSet={handleUsernameSet}
           getAccessToken={getAccessToken}
         />
@@ -1396,7 +1362,7 @@ export default function Chat() {
                   deleted={deleting}
                   accountLinked={accountLinked}
                   wsStreaming={wsStreaming}
-                  onScrollToBottom={() => {}}
+                  onScrollToBottom={() => { }}
                 />
               )}
 

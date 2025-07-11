@@ -1,5 +1,5 @@
-import { NotificationService } from './NotificationService';
 import Constants from 'expo-constants';
+import { NotificationService } from './NotificationService';
 
 const API_URL = Constants.expoConfig?.extra?.apiUrl;
 export class PushNotificationService {
@@ -7,7 +7,7 @@ export class PushNotificationService {
     try {
       // Get push token from NotificationService
       const expoPushToken = await NotificationService.registerForPushNotificationsAsync();
-      
+
       if (!expoPushToken) {
         console.log('Failed to get push token');
         return false;

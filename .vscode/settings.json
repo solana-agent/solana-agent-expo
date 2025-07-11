@@ -1,8 +1,15 @@
 {
-    "files.associations": {
-        "*.ipp": "c",
-        "regex": "c",
-        "sstream": "c",
-        "strstream": "c"
-    }
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit",
+        "source.organizeImports": "explicit"
+    },
+    "eslint.validate": [
+        "javascript",
+        "javascriptreact",
+        "typescript",
+        "typescriptreact"
+    ],
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "javascript.preferences.importModuleSpecifier": "relative"
 }
