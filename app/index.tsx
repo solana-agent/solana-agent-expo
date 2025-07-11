@@ -264,42 +264,83 @@ function InfiniteScrollChat({
   };
 
   return (
-    <FlatList
-      ref={flatListRef}
-      data={chatHistory.data}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <View>
-          <Card style={[styles.card, styles.youCard]}>
-            <Card.Title title="You" titleStyle={styles.youText} />
-            <Card.Content>
-              <Text style={styles.youText}>{item.user_message}</Text>
-            </Card.Content>
-          </Card>
-          <Card style={[styles.card, { marginTop: 10 }, styles.agentCard]}>
-            <Card.Title title="Agent" titleStyle={styles.agentText} />
-            <Card.Content>
-              <Hyperlink
-                linkDefault={true}
-                linkStyle={{ color: "#a5b4fc" }}
-                onPress={async (url) => {
-                  try {
-                    await Linking.openURL(url);
-                  } catch { }
-                }}
-              >
-                <Text style={styles.agentText}>{item.assistant_message}</Text>
-              </Hyperlink>
-            </Card.Content>
-          </Card>
+    <>
+      {fetchError && (
+        <View style={{ padding: 16, backgroundColor: '#dc2626', margin: 16, borderRadius: 8 }}>
+          <Text style={{ color: '#fff', textAlign: 'center', marginBottom: 8 }}>
+            Failed to load chat history
+          </Text>
+          <Button
+            mode="outlined"
+            onPress={() => {
+              setFetchError(false);
+              fetchData(1); // Retry loading first page
+            }}
+            labelStyle={{ color: '#fff' }}
+            style={{ borderColor: '#fff' }}
+          >
+            Retry
+          </Button>
         </View>
       )}
-      onEndReached={handleEndReached}
-      onEndReachedThreshold={0.1}
-      contentContainerStyle={styles.flatListContent}
-      ListFooterComponent={fetchLoading ? <ActivityIndicator color="#fff" /> : null}
-      inverted
-    />
+
+      <FlatList
+        ref={flatListRef}
+        data={chatHistory.data}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View>
+            <Card style={[styles.card, styles.youCard]}>
+              <Card.Title title="You" titleStyle={styles.youText} />
+              <Card.Content>
+                <Text style={styles.youText}>{item.user_message}</Text>
+              </Card.Content>
+            </Card>
+            <Card style={[styles.card, { marginTop: 10 }, styles.agentCard]}>
+              <Card.Title title="Agent" titleStyle={styles.agentText} />
+              <Card.Content>
+                <Hyperlink
+                  linkDefault={true}
+                  linkStyle={{ color: "#a5b4fc" }}
+                  onPress={async (url) => {
+                    try {
+                      await Linking.openURL(url);
+                    } catch { }
+                  }}
+                >
+                  <Text style={styles.agentText}>{item.assistant_message}</Text>
+                </Hyperlink>
+              </Card.Content>
+            </Card>
+          </View>
+        )}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.1}
+        contentContainerStyle={styles.flatListContent}
+        ListFooterComponent={
+          fetchLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : fetchError ? (
+            <View style={{ padding: 16, alignItems: 'center' }}>
+              <Text style={{ color: '#f87171', marginBottom: 8 }}>
+                Error loading more messages
+              </Text>
+              <Button
+                mode="text"
+                onPress={() => {
+                  setFetchError(false);
+                  fetchData(chatHistory.page + 1);
+                }}
+                labelStyle={{ color: '#60a5fa' }}
+              >
+                Try Again
+              </Button>
+            </View>
+          ) : null
+        }
+        inverted
+      />
+    </>
   );
 }
 
