@@ -1,70 +1,92 @@
-import { useHeaderHeight } from "@react-navigation/elements";
-import { Stack, useLocalSearchParams } from "expo-router";
-import React, { useEffect } from "react";
-import { SafeAreaView, Text } from "react-native";
-import { Channel, MessageInput, MessageList, useChatContext } from "stream-chat-expo";
-import { chatClient, chatUserId } from "../../config/chatConfig";
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { Channel, MessageList, MessageInput, useChatContext } from 'stream-chat-expo';
 
 const DARK_BG = "#18181b";
 
 export default function ChannelScreen() {
-    const { channel, setActiveChannel } = useChatContext();
+    const { client } = useChatContext();
     const { cid } = useLocalSearchParams();
-    const headerHeight = useHeaderHeight();
+    const [channel, setChannel] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
-    // If no channel in context, try to get it from the client
     useEffect(() => {
         const loadChannel = async () => {
-            if (!channel && cid && chatClient) {
-                try {
-                    console.log('Loading channel from cid:', cid);
-                    const channelInstance = chatClient.channel('messaging', cid as string);
-                    await channelInstance.watch();
-                    setActiveChannel(channelInstance);
-                } catch (error) {
-                    console.error('Error loading channel:', error);
+            try {
+                if (!cid || !client) {
+                    setError('No channel ID or client available');
+                    setLoading(false);
+                    return;
                 }
+
+                const channelId = cid as string;
+                const cleanChannelId = channelId.includes(':') ? channelId.split(':')[1] : channelId;
+
+                console.log('Loading channel from ID:', channelId);
+
+                const channelInstance = client.channel('messaging', cleanChannelId);
+                await channelInstance.watch();
+
+                setChannel(channelInstance);
+                setError('');
+            } catch (err) {
+                console.error('Error loading channel:', err);
+                setError('Failed to load channel');
+            } finally {
+                setLoading(false);
             }
         };
 
         loadChannel();
-    }, [cid, channel, setActiveChannel]);
+    }, [cid, client]);
 
-    if (!channel) {
+    if (loading) {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: DARK_BG }}>
-                <Stack.Screen options={{ title: "Chat" }} />
-                <Text style={{ color: "#fff", textAlign: "center", marginTop: 50 }}>
-                    Loading chat...
-                </Text>
-            </SafeAreaView>
+            <View style={[styles.container, styles.centerContent]}>
+                <Text style={styles.loadingText}>Loading channel...</Text>
+            </View>
         );
     }
 
-    // Get the other user's name for the header
-    const otherMember = Object.values(channel.state.members).find(
-        member => member.user?.id !== chatUserId
-    );
-    const otherUserName = otherMember?.user?.name || otherMember?.user?.id || 'Chat';
+    if (error || !channel) {
+        return (
+            <View style={[styles.container, styles.centerContent]}>
+                <Text style={styles.errorText}>{error || 'Channel not found'}</Text>
+            </View>
+        );
+    }
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: DARK_BG }}>
-            <Stack.Screen
-                options={{
-                    title: otherUserName,
-                    headerStyle: { backgroundColor: DARK_BG },
-                    headerTintColor: "#fff"
-                }}
-            />
-            <Channel
-                channel={channel}
-                keyboardVerticalOffset={headerHeight}
-                audioRecordingEnabled
-                disableTypingIndicator={false}
-            >
+        <View style={styles.container}>
+            <Channel channel={channel}>
                 <MessageList />
                 <MessageInput />
             </Channel>
-        </SafeAreaView>
+        </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: DARK_BG,
+    },
+    centerContent: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    loadingText: {
+        color: '#ffffff',
+        fontSize: 16,
+        fontWeight: '500',
+    },
+    errorText: {
+        color: '#f87171',
+        fontSize: 16,
+        fontWeight: '500',
+        textAlign: 'center',
+    },
+});

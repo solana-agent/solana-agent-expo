@@ -2,7 +2,7 @@ import { useRouter } from "expo-router";
 import React, { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { FAB, Text } from "react-native-paper";
-import { ChannelList, Chat } from "stream-chat-expo";
+import { ChannelList } from "stream-chat-expo";
 import { useAppStore } from "../components/Store";
 import { chatClient } from "../config/chatConfig";
 
@@ -57,26 +57,28 @@ export default function ChatScreen() {
 
   return (
     <View style={styles.container}>
-      <Chat client={chatClient} enableOfflineSupport>
-        <ChannelList
-          filters={memoizedFilters}
-          options={options}
-          sort={sort}
-          onSelect={(channel) => {
-            router.push(`/channel/${channel.cid}`);
-          }}
-          additionalFlatListProps={{
-            style: { backgroundColor: DARK_BG },
-          }}
-        />
+      <ChannelList
+        filters={memoizedFilters}
+        options={options}
+        sort={sort}
+        onSelect={(channel) => {
+          console.log('Channel selected:', channel.cid);
+          // Extract just the channel ID part after the colon
+          // Format: "messaging:channelId" -> "channelId"
+          const channelId = channel.cid.split(':')[1] || channel.cid;
+          router.push(`/channel/${channelId}`);
+        }}
+        additionalFlatListProps={{
+          style: { backgroundColor: DARK_BG },
+        }}
+      />
 
-        <FAB
-          icon="plus"
-          style={styles.fab}
-          onPress={startNewChat}
-          color="#fff"
-        />
-      </Chat>
+      <FAB
+        icon="plus"
+        style={styles.fab}
+        onPress={startNewChat}
+        color="#fff"
+      />
     </View>
   );
 }
