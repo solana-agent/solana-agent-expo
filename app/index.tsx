@@ -517,6 +517,7 @@ export default function Chat() {
   const [username, setUsername] = useState<string | null>(null);
   const [chatConnected, setChatConnected] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(true);
+  const [chatConnectAttempted, setChatConnectAttempted] = useState(false);
 
   // Biometric authentication state
   const [isAppActive, setIsAppActive] = useState(true);
@@ -551,78 +552,71 @@ export default function Chat() {
       console.log('=== initializeChat called ===');
       console.log('isReady:', isReady);
       console.log('user:', !!user);
-      console.log('user.id:', user?.id);
+      console.log('chatConnectAttempted:', chatConnectAttempted);
       
-      if (user) {
-        try {
-          console.log('=== Starting chat initialization... ===');
-          
-          // First, check locally stored data
-          console.log('Checking local storage...');
-          const storedUsername = await getStoredUsername();
-          const storedToken = await getStoredChatToken();
-          
-          console.log('Stored username:', storedUsername);
-          console.log('Stored token exists:', !!storedToken);
-          console.log('Stored token length:', storedToken?.length || 0);
-          
-          if (storedUsername && storedToken) {
-            console.log('=== Attempting to reconnect with stored data... ===');
-            // Try to reconnect to chat with stored data
-            try {
-              await connectChatUser(storedUsername, storedToken);
-              setUsername(storedUsername);
-              setChatConnected(true);
-              setCheckingUsername(false);
-              console.log('=== Successfully reconnected with stored data ===');
-              return;
-            } catch (error) {
-              console.error('Failed to reconnect with stored data:', error);
-              // Clear invalid stored data and continue to server check
-              console.log('Clearing invalid stored data...');
-              await clearStoredData();
-            }
-          }
+      if (!user || chatConnectAttempted) {
+        console.log('=== Skipping chat initialization - no user or already attempted ===');
+        setCheckingUsername(false);
+        return;
+      }
 
-          // If no valid local data, check server for existing username
-          console.log('=== Checking server for existing username... ===');
-          const serverData = await fetchExistingUserData(getAccessToken);
+      try {
+        console.log('=== Starting chat initialization... ===');
+        setChatConnectAttempted(true); // Set this immediately to prevent multiple calls
+        
+        // First, check locally stored data
+        console.log('Checking local storage...');
+        const storedUsername = await getStoredUsername();
+        const storedToken = await getStoredChatToken();
+        
+        console.log('Stored username:', storedUsername);
+        console.log('Stored token exists:', !!storedToken);
+        
+        if (storedUsername && storedToken) {
+          console.log('=== Found stored data, setting username directly (skip connectChatUser) ===');
+          setUsername(storedUsername);
+          setChatConnected(true);
+          setCheckingUsername(false);
+          return;
+        }
+
+        // If no valid local data, check server for existing username
+        console.log('=== Checking server for existing username... ===');
+        const serverData = await fetchExistingUserData(getAccessToken);
+        
+        console.log('=== Server data received ===');
+        console.log('serverData:', JSON.stringify(serverData, null, 2));
+        
+        if (serverData.username && serverData.chatToken) {
+          console.log('=== Found existing username on server:', serverData.username, '===');
           
-          console.log('=== Server data received ===');
-          console.log('serverData:', JSON.stringify(serverData, null, 2));
+          // Store the data locally
+          console.log('Storing data locally...');
+          await storeUsername(serverData.username);
+          await storeChatToken(serverData.chatToken);
+          if (serverData.avatarUrl) {
+            await storeAvatarUrl(serverData.avatarUrl);
+          }
+          console.log('Data stored locally');
           
-          if (serverData.username && serverData.chatToken) {
-            console.log('=== Found existing username on server:', serverData.username, '===');
-            
-            // Store the data locally
-            console.log('Storing data locally...');
-            await storeUsername(serverData.username);
-            await storeChatToken(serverData.chatToken);
-            if (serverData.avatarUrl) {
-              await storeAvatarUrl(serverData.avatarUrl);
-            }
-            console.log('Data stored locally');
-            
-            // Connect to chat
+          // Only connect to chat if not already connected
+          if (!chatConnected) {
             console.log('Connecting to chat...');
             await connectChatUser(serverData.username, serverData.chatToken, serverData.avatarUrl || undefined);
-            setUsername(serverData.username);
-            setChatConnected(true);
-            console.log('=== Successfully connected with server data ===');
-          } else {
-            console.log('=== No existing username found on server - user needs to create one ===');
-            // User needs to create a username
-            setUsername(null);
-            setChatConnected(false);
           }
-        } catch (error) {
-          console.error('=== Error initializing chat ===:', error);
-          // If there's an error, assume user needs to create username
+          
+          setUsername(serverData.username);
+          setChatConnected(true);
+          console.log('=== Successfully set up with server data ===');
+        } else {
+          console.log('=== No existing username found on server - user needs to create one ===');
           setUsername(null);
           setChatConnected(false);
         }
-      } else {
-        console.log('=== No user found, skipping chat initialization ===');
+      } catch (error) {
+        console.error('=== Error initializing chat ===:', error);
+        setUsername(null);
+        setChatConnected(false);
       }
       
       console.log('=== Setting checkingUsername to false ===');
@@ -632,23 +626,24 @@ export default function Chat() {
     console.log('=== useEffect triggered ===');
     console.log('Dependencies - isReady:', isReady, 'user:', !!user);
     
-    if (isReady && user) {
-      console.log('=== Both isReady and user are true, calling initializeChat ===');
+    if (isReady && user && !chatConnectAttempted) {
+      console.log('=== Calling initializeChat ===');
       initializeChat();
-    } else {
-      console.log('=== Conditions not met, not calling initializeChat ===');
-      // Set checkingUsername to false if user is not logged in
-      if (isReady && !user) {
-        setCheckingUsername(false);
-      }
+    } else if (isReady && !user) {
+      console.log('=== User logged out, cleaning up ===');
+      setCheckingUsername(false);
+      setUsername(null);
+      setChatConnected(false);
+      setChatConnectAttempted(false); // Reset the flag on logout
     }
-  }, [user, isReady]); // Remove getAccessToken from dependencies
+  }, [user, isReady, chatConnectAttempted]);
 
   // Clear data when user logs out
   useEffect(() => {
     if (!user) {
       setUsername(null);
       setChatConnected(false);
+      setChatConnectAttempted(false); // Add this line
       clearStoredData();
     }
   }, [user]);
