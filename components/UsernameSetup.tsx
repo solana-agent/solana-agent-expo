@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import { View, TextInput, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Card, Text } from "react-native-paper";
+import Constants from "expo-constants";
 
 const DARK_BG = "#18181b";
 const PURPLE_800 = "#6d28d9";
-const API_URL = "https://api.sol-pay.co";
+const API_URL = Constants.expoConfig?.extra?.apiUrl;
 
 interface UsernameSetupProps {
   onUsernameSet: (username: string) => void;

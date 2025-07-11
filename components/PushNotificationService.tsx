@@ -1,8 +1,7 @@
-import * as Notifications from 'expo-notifications';
 import { NotificationService } from './NotificationService';
+import Constants from 'expo-constants';
 
-const API_URL = "https://api.sol-pay.co";
-
+const API_URL = Constants.expoConfig?.extra?.apiUrl;
 export class PushNotificationService {
   static async registerPushToken(walletAddress: string, getAccessToken: () => Promise<string | null>): Promise<boolean> {
     try {

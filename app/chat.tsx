@@ -2,36 +2,72 @@ import React, { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { ChannelList } from "stream-chat-expo";
 import { useRouter } from "expo-router";
-import { useChatContext } from "../contexts/ChatContext";
 import { chatUserId } from "../config/chatConfig";
-import { FAB } from "react-native-paper";
+import { FAB, Text } from "react-native-paper";
+import { usePrivy } from "@privy-io/expo";
+import { useChatContext } from "../contexts/ChatContext";
 
 const DARK_BG = "#18181b";
 
-// Filter for direct messages only
-const filters = {
-  members: { $in: [chatUserId] },
-  type: "messaging",
-  member_count: 2, // Only 1-on-1 conversations
-};
-
-const sort = [{ last_message_at: -1 as const }];
-
-const options = {
-  state: true,
-  watch: true,
-  limit: 30,
-};
-
 export default function ChatScreen() {
+  const { isReady, user } = usePrivy();
   const router = useRouter();
   const { setChannel } = useChatContext();
-  const memoizedFilters = useMemo(() => filters, []);
+
+  // Move all hooks to the top level of the component
+  const memoizedFilters = useMemo(() => {
+    if (!chatUserId) return {};
+    return {
+      members: { $in: [chatUserId] },
+      type: "messaging",
+      member_count: 2, // Only 1-on-1 conversations
+    };
+  }, []);
+
+  const sort = useMemo(() => [{ last_message_at: -1 as const }], []);
+
+  const options = useMemo(() => ({
+    state: true,
+    watch: true,
+    limit: 30,
+  }), []);
 
   const startNewChat = () => {
     router.push('/newchat');
   };
 
+  // Show loading state while Privy is initializing
+  if (!isReady) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={{ color: "#fff" }}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // Show warning if user is not authenticated (like account page)
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.centerContent}>
+          <Text style={{ color: "#fff" }}>Please login to access chat</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Show message if no chat user ID (username not set up)
+  if (!chatUserId) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.centerContent}>
+          <Text style={{ color: "#fff" }}>Please set up your username to access chat</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render the chat list when everything is ready
   return (
     <View style={styles.container}>
       <ChannelList
@@ -39,7 +75,8 @@ export default function ChatScreen() {
         options={options}
         sort={sort}
         onSelect={(channel) => {
-          setChannel(channel);
+          console.log('Channel selected:', channel.cid);
+          setChannel(channel); // Set the channel in context
           router.push(`/channel/${channel.cid}`);
         }}
         additionalFlatListProps={{
@@ -62,6 +99,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: DARK_BG,
+  },
+  centerContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
   },
   fab: {
     position: 'absolute',

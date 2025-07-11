@@ -68,6 +68,8 @@ export default {
       privyAppId: process.env.EXPO_PUBLIC_PRIVY_APP_ID,
       privyClientId: process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID,
       streamChatApiKey: process.env.EXPO_PUBLIC_STREAM_CHAT_API_KEY,
+      apiUrl: process.env.EXPO_PUBLIC_API_URL,
+      wsUrl: process.env.EXPO_PUBLIC_WS_URL,
     },
     owner: "komdodx",
     plugins: [

@@ -3,6 +3,7 @@ import { StreamChat } from 'stream-chat';
 import Constants from 'expo-constants';
 
 export const chatApiKey = Constants.expoConfig?.extra?.streamChatApiKey || "your-fallback-key";
+const API_URL = Constants.expoConfig?.extra?.apiUrl;
 
 // These will be set dynamically after username creation/retrieval
 export let chatUserId = "";
@@ -187,10 +188,12 @@ export const fetchExistingUserData = async (getAccessToken: () => Promise<string
   try {
     const accessToken = await getAccessToken();
     if (!accessToken) {
+      console.log('No access token available');
       return { username: null, chatToken: null, avatarUrl: null };
     }
 
-    const response = await fetch(`https://api.sol-pay.co/chat/user-info`, {
+    console.log('Fetching user data from server...');
+    const response = await fetch(`${API_URL}/chat/user-info`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -198,18 +201,26 @@ export const fetchExistingUserData = async (getAccessToken: () => Promise<string
       },
     });
 
+    console.log('Server response status:', response.status);
+
     if (response.ok) {
       const data = await response.json();
+      console.log('Server response data:', data);
+      
       return {
         username: data.username || null,
-        chatToken: data.chatToken || null,
-        avatarUrl: data.avatarUrl || null,
+        chatToken: data.chatToken || data.chat_token || null, // Handle both field names
+        avatarUrl: data.avatarUrl || data.avatar_url || null, // Handle both field names
       };
     } else if (response.status === 404) {
-      // User doesn't have a username yet
+      // User doesn't have a username yet - this is expected for new/legacy users
+      console.log('User does not have username set up yet (404)');
       return { username: null, chatToken: null, avatarUrl: null };
     } else {
-      throw new Error('Failed to fetch user data');
+      console.error('Unexpected response status:', response.status);
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+      return { username: null, chatToken: null, avatarUrl: null };
     }
   } catch (error) {
     console.error('Error fetching existing user data:', error);

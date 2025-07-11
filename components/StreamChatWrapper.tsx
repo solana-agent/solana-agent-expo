@@ -3,6 +3,7 @@ import { Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Chat, OverlayProvider } from "stream-chat-expo";
 import type { DeepPartial, Theme } from 'stream-chat-react-native';
+import { usePrivy } from "@privy-io/expo";
 import { chatClient, getChatUser } from "../config/chatConfig";
 
 const getDarkTheme = (): DeepPartial<Theme> => ({
@@ -55,27 +56,50 @@ const getDarkTheme = (): DeepPartial<Theme> => ({
 
 export const StreamChatWrapper = ({ children }: { children: React.ReactNode }) => {
   const [theme, setTheme] = useState(getDarkTheme());
-  const user = getChatUser();
+  const { user, isReady } = usePrivy();
+  const chatUser = getChatUser();
+
+  console.log('=== StreamChatWrapper render ===');
+  console.log('isReady:', isReady);
+  console.log('user:', !!user);
+  console.log('chatClient:', !!chatClient);
+  console.log('chatUser.id:', chatUser.id);
 
   useEffect(() => {
     setTheme(getDarkTheme());
   }, []);
 
-  if (!chatClient || !user.id) {
+  // If Privy isn't ready yet, show loading but don't block everything
+  if (!isReady) {
+    console.log('=== StreamChatWrapper: Privy not ready ===');
     return (
       <SafeAreaView style={{ backgroundColor: '#18181b', flex: 1 }}>
         <Text style={{ color: "#fff", textAlign: "center", marginTop: 50 }}>
-          Loading chat...
+          Loading...
         </Text>
       </SafeAreaView>
     );
   }
 
-  return (
-    <OverlayProvider value={{ style: theme }}>
-      <Chat client={chatClient} enableOfflineSupport>
-        {children}
-      </Chat>
-    </OverlayProvider>
-  );
+  // If user is not logged in, just render children without chat wrapper
+  if (!user) {
+    console.log('=== StreamChatWrapper: No user, rendering children directly ===');
+    return <>{children}</>;
+  }
+
+  // If user is logged in and chat is ready, wrap with Stream Chat
+  if (chatClient && chatUser.id) {
+    console.log('=== StreamChatWrapper: Chat ready, wrapping with Stream Chat ===');
+    return (
+      <OverlayProvider value={{ style: theme }}>
+        <Chat client={chatClient} enableOfflineSupport>
+          {children}
+        </Chat>
+      </OverlayProvider>
+    );
+  }
+
+  // User is logged in but chat isn't ready - just render children without blocking
+  console.log('=== StreamChatWrapper: User logged in but chat not ready, rendering children ===');
+  return <>{children}</>;
 };

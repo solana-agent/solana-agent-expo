@@ -1,17 +1,36 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { SafeAreaView, Text, View } from "react-native";
 import { Channel, MessageInput, MessageList } from "stream-chat-expo";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import { useChatContext } from "../../contexts/ChatContext";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { chatUserId } from "../../config/chatConfig";
+import { chatUserId, chatClient } from "../../config/chatConfig";
 
 const DARK_BG = "#18181b";
 
 export default function ChannelScreen() {
-  const { channel, setThread } = useChatContext();
-  const router = useRouter();
+  const { channel, setChannel, setThread } = useChatContext();
+  const { cid } = useLocalSearchParams();
   const headerHeight = useHeaderHeight();
+  const router = useRouter();
+
+  // If no channel in context, try to get it from the client
+  useEffect(() => {
+    const loadChannel = async () => {
+      if (!channel && cid && chatClient) {
+        try {
+          console.log('Loading channel from cid:', cid);
+          const channelInstance = chatClient.channel('messaging', cid as string);
+          await channelInstance.watch();
+          setChannel(channelInstance);
+        } catch (error) {
+          console.error('Error loading channel:', error);
+        }
+      }
+    };
+
+    loadChannel();
+  }, [cid, channel, setChannel]);
 
   if (!channel) {
     return (
@@ -43,7 +62,6 @@ export default function ChannelScreen() {
         channel={channel} 
         keyboardVerticalOffset={headerHeight}
         audioRecordingEnabled
-        // Disable threads for simpler Telegram-like experience
         disableTypingIndicator={false}
       >
         <MessageList />

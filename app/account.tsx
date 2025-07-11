@@ -6,9 +6,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { usePrivy, useEmbeddedSolanaWallet } from "@privy-io/expo";
 import { PushNotificationService } from '../components/PushNotificationService';
 import { getStoredUsername } from '../config/chatConfig';
+import Constants from "expo-constants";
 
 const DARK_NAV = "#18181b";
-const API_URL = "https://api.sol-pay.co";
+const API_URL = Constants.expoConfig?.extra?.apiUrl;
 
 export default function AccountScreen() {
   const { isReady, user, logout, getAccessToken } = usePrivy();
