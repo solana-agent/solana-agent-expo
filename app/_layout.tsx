@@ -21,7 +21,7 @@ import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-goog
 import * as Notifications from 'expo-notifications';
 import { NotificationService } from '../components/NotificationService';
 import { chatClient } from '../config/chatConfig';
-import { useAppStore } from '../components/Store';
+import { useAppStore } from './store/Store';
 global.Buffer = Buffer;
 
 const DARK_BG = "#18181b";
@@ -30,10 +30,10 @@ const DARK_NAV = "#18181b";
 const streamChatTheme = {
   colors: {
     // Base colors
-    white: '#ffffff',
-    white_snow: '#27272a',
-    white_smoke: '#3f3f46',
-    black: '#ffffff',
+    white: '#ffffff', // Keep this for text
+    white_snow: '#18181b', // Change this - likely the main background
+    white_smoke: '#18181b', // Change this too
+    black: '#ffffff', // Keep this for text on dark backgrounds
     grey: '#a1a1aa',
     grey_gainsboro: '#52525b',
     grey_whisper: '#3f3f46',

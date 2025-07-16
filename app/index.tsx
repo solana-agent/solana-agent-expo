@@ -36,7 +36,7 @@ import {
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { BiometricService } from "../components/BiometricService";
 import { PushNotificationService } from '../components/PushNotificationService';
-import { useAppStore } from "../components/Store";
+import { useAppStore } from "./store/Store";
 import { UsernameSetup } from "../components/UsernameSetup";
 import {
   connectChatUser,
@@ -132,6 +132,114 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
   },
+  modalContainer: {
+    margin: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: "#1f2937", // gray-800
+    borderRadius: 12,
+    padding: 24,
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: "#374151", // gray-700
+  },
+  modalHeader: {
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+  },
+  modalBody: {
+    marginBottom: 24,
+  },
+  infoSection: {
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  infoLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#d1d5db', // gray-300
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  amountContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+  },
+  amountValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  tokenText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  currencyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginTop: 4,
+  },
+  addressText: {
+    fontFamily: 'monospace',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+    textAlign: 'center',
+    flexWrap: 'wrap',
+  },
+  memoText: {
+    fontSize: 14,
+    color: '#d1d5db',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  payAmountText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+    textAlign: 'center',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  confirmButton: {
+    flex: 1,
+    backgroundColor: '#3b82f6', // blue-500
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#374151', // gray-700
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
 
 type ChatMessage = {
@@ -155,6 +263,7 @@ type PaymentRequest = {
   to: string;
   token: string | null;
   memo: string | null;
+  currency: string | null;
   human: string;
 };
 
@@ -398,41 +507,119 @@ function DelegateWalletButton({
   );
 }
 
+const ALLOWED_FIAT = [
+  'AUD', 'BRL', 'CAD', 'CHF', 'CLP', 'CNH', 'COP', 'EUR', 'GBP', 'IDR',
+  'INR', 'JPY', 'KRW', 'MXN', 'NOK', 'NZD', 'PEN', 'PHP', 'SEK', 'SGD',
+  'TRY', 'TWD', 'USD', 'ZAR',
+];
+
+function currencySymbol(fiat: string | undefined | null): string {
+  if (!fiat) return '';
+  if (!ALLOWED_FIAT.includes(fiat)) return '';
+  switch (fiat) {
+    case 'AUD': return '$';
+    case 'BRL': return '$';
+    case 'CAD': return '$';
+    case 'CHF': return 'CHF';
+    case 'CLP': return '$';
+    case 'CNH': return '¥';
+    case 'COP': return '$';
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    case 'IDR': return 'Rp';
+    case 'INR': return '₹';
+    case 'JPY': return '¥';
+    case 'KRW': return '₩';
+    case 'MXN': return '$';
+    case 'NOK': return 'kr';
+    case 'NZD': return '$';
+    case 'PEN': return 'S/';
+    case 'PHP': return '₱';
+    case 'SEK': return 'kr';
+    case 'SGD': return '$';
+    case 'TRY': return '₺';
+    case 'TWD': return '$';
+    case 'USD': return '$';
+    case 'ZAR': return 'R';
+    default: return '';
+  }
+}
+
+function currencyName(fiat: string | undefined): string {
+  if (!fiat) return '';
+  if (!ALLOWED_FIAT.includes(fiat)) return '';
+  switch (fiat) {
+    case 'AUD': return 'Australian Dollars';
+    case 'BRL': return 'Brazilian Reais';
+    case 'CAD': return 'Canadian Dollars';
+    case 'CHF': return 'Swiss Francs';
+    case 'CLP': return 'Chilean Pesos';
+    case 'CNH': return 'Chinese Yuan';
+    case 'COP': return 'Colombian Pesos';
+    case 'EUR': return 'Euros';
+    case 'GBP': return 'British Pounds';
+    case 'IDR': return 'Indonesian Rupiah';
+    case 'INR': return 'Indian Rupees';
+    case 'JPY': return 'Japanese Yen';
+    case 'KRW': return 'South Korean Won';
+    case 'MXN': return 'Mexican Pesos';
+    case 'NOK': return 'Norwegian Kroner';
+    case 'NZD': return 'New Zealand Dollars';
+    case 'PEN': return 'Peruvian Soles';
+    case 'PHP': return 'Philippine Pesos';
+    case 'SEK': return 'Swedish Kronor';
+    case 'SGD': return 'Singapore Dollars';
+    case 'TRY': return 'Turkish Lira';
+    case 'TWD': return 'New Taiwan Dollars';
+    case 'USD': return 'United States Dollars';
+    case 'ZAR': return 'South African Rand';
+    default: return '';
+  }
+}
+
 // --- Agent transfer URI parser for amount, to, token, memo ---
-function parseAgentTransferUri(uri: string): {
+function parseAgentTransferUri(uri: string, username: string | null): {
   amount: string | null;
   to: string;
   token: string | null;
-  memo: string | null;
+  currency: string | null;
+  id: string | null;
   human: string;
   valid: boolean;
 } {
   try {
     console.log('Parsing URI:', uri);
 
-    let amount: string | null = null;
+    let currency: string | null = null;
     let to: string = "";
     let token: string | null = null;
-    let memo: string | null = null;
+    let id: string | null = null;
+    let amount: string | null = null;
+
+    // Clean up the URI of non-ASCII characters
+    uri = uri.replace(/[^\x00-\x7F]/g, '');
 
     // Handle Universal Links
     if (uri.startsWith("https://sol-pay.co/pay")) {
       try {
         const url = new URL(uri);
-        amount = url.searchParams.get("amount");
-        to = url.searchParams.get("to") || "";
-        token = url.searchParams.get("token") || "SOL";
-        memo = url.searchParams.get("memo");
+        const params = new URLSearchParams(url.search);
+        amount = params.get("a");
+        to = params.get("to")?.toLowerCase() || "";
+        token = params.get("t") || "USDC";
+        currency = params.get("c")?.toUpperCase() || "USD";
+        id = params.get("id") || null;
 
-        console.log('Universal Link - Parsed params:', { amount, to, token, memo });
+        console.log('Universal Link - Parsed params:', { amount, to, token, currency, id });
       } catch (error) {
         console.error('Error parsing Universal Link:', error);
         return {
           amount: null,
           to: "",
           token: null,
-          memo: null,
-          human: "Invalid Universal Link format",
+          currency: null,
+          id: null,
+          human: "Invalid URI: unable to parse Universal Link",
           valid: false,
         };
       }
@@ -449,27 +636,31 @@ function parseAgentTransferUri(uri: string): {
           amount: null,
           to: "",
           token: null,
-          memo: null,
-          human: "Invalid URI: only pay command is supported",
+          currency: null,
+          id: null,
+          human: "Invalid URI: must use agent://pay command",
           valid: false,
         };
       }
 
       const params = new URLSearchParams(queryString || "");
-      amount = params.get("amount");
-      to = params.get("to") || "";
-      token = params.get("token") || "SOL";
-      memo = params.get("memo");
+      amount = params.get("a") || null;
+      to = params.get("to")?.toLowerCase() || "";
+      token = params.get("t") || "USDC"; // Default to USDC if not specified
+      const memo = params.get("m") || null;
+      currency = params.get("c")?.toUpperCase() || "USD"; // Default to USD if not specified
+      id = params.get("id") || null;
 
-      console.log('Custom scheme - Parsed params:', { amount, to, token, memo });
+      console.log('Custom scheme - Parsed params:', { amount, to, token, memo, currency, id });
     }
     else {
       return {
         amount: null,
         to: "",
         token: null,
-        memo: null,
-        human: "Invalid URI: must use https://sol-pay.co/pay or agent:// scheme",
+        id: null,
+        currency: null,
+        human: "Invalid URI: must start with agent://pay or https://sol-pay.co/pay",
         valid: false,
       };
     }
@@ -479,32 +670,66 @@ function parseAgentTransferUri(uri: string): {
         amount: null,
         to: "",
         token: null,
-        memo: null,
-        human: "Invalid URI: 'to' parameter is required",
+        id: null,
+        currency: null,
+        human: "Invalid URI: recipient (to) is required",
         valid: false,
       };
     }
 
-    // Validate recipient: must be either a Solana address (base58, 32-44 chars) or SNS name (*.sol)
-    const base58re = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-    const snsNameRe = /^[a-zA-Z0-9_-]+\.sol$/;
-    if (!base58re.test(to) && !snsNameRe.test(to)) {
+    if (!to.startsWith("@")) {
+      to = "@" + to;
+    }
+
+    if (!token) {
+      token = 'USDC';
+      if (currency === 'EUR') {
+        token = 'EURC';
+      }
+    }
+    if (token === 'USDC' && currency === 'EUR') {
+      token = 'EURC';
+    }
+    if (token === 'EURC' && currency === 'USD') {
+      token = 'USDC';
+    }
+
+    if (token !== 'USDC' && token !== 'EURC') {
       return {
         amount: null,
         to: "",
         token: null,
-        memo: null,
-        human: "Invalid recipient: must be a Solana address or SNS name (*.sol)",
+        id: null,
+        currency: null,
+        human: "Invalid URI: token must be USDC or EURC",
         valid: false,
       };
     }
+
+    if (!currency || !ALLOWED_FIAT.includes(currency)) {
+      return {
+        amount: null,
+        to: "",
+        token: null,
+        id: null,
+        currency: null,
+        human: "Invalid URI: currency must be one of " + ALLOWED_FIAT.join(", "),
+        valid: false,
+      };
+    }
+
+    //TODO validate that the username exists in the system
 
     // Build human readable string
     let human = `Send `;
     human += amount ? `${amount} ` : "";
     human += `${token} to ${to}`;
-    if (memo) {
-      human += ` with a memo of '${memo}'`;
+    if (id) {
+      const j = { "id": id, "currency": currency, "amount": amount, "to": to, "from": `@${username}` || "unknown" };
+      human += ` with a memo of '${JSON.stringify(j)}'`;
+    } else {
+      const j = { "currency": currency, "amount": amount, "to": to, "from": `@${username}` || "unknown" };
+      human += ` with a memo of '${JSON.stringify(j)}'`;
     }
 
     console.log('Generated human command:', human);
@@ -513,7 +738,8 @@ function parseAgentTransferUri(uri: string): {
       amount,
       to,
       token,
-      memo,
+      currency,
+      id,
       human,
       valid: true,
     };
@@ -523,7 +749,8 @@ function parseAgentTransferUri(uri: string): {
       amount: null,
       to: "",
       token: null,
-      memo: null,
+      id: null,
+      currency: null,
       human: "Invalid Pay URI",
       valid: false,
     };
@@ -922,38 +1149,38 @@ export default function Chat() {
     setPaymentRequest(null);
   };
 
-  // Common function to handle payment requests from both NFC and deep links
-  const handlePaymentRequest = (source: string, payload: string) => {
-    console.log(`${source} payment request:`, payload);
-
-    if (payload.startsWith("agent://pay") || payload.startsWith("https://wallet.solana-agent.com/pay") || payload.startsWith("https://sol-pay.co/pay")) {
-      const parsed = parseAgentTransferUri(payload);
-      if (parsed.valid) {
-        setPaymentRequest(null);
-        setShowPaymentModal(false);
-
-        setTimeout(() => {
-          setPaymentRequest({
-            id: Date.now().toString(),
-            amount: parsed.amount,
-            to: parsed.to,
-            token: parsed.token,
-            memo: parsed.memo,
-            human: parsed.human,
-          });
-          setShowPaymentModal(true);
-        }, 100);
-      } else {
-        setError(parsed.human);
-        setHasError(true);
-      }
-    }
-  };
-
   // NFC handling
   useEffect(() => {
     // Only handle NFC if user is authenticated, delegated, biometric auth passed, and chat connected
     if (!user || !alreadyDelegated || !biometricAuthenticated || !username || !chatConnected) return;
+
+    const handlePaymentRequest = (source: string, payload: string) => {
+      console.log(`${source} payment request:`, payload);
+
+      if (payload.startsWith("agent://pay") || payload.startsWith("https://wallet.solana-agent.com/pay") || payload.startsWith("https://sol-pay.co/pay")) {
+        const parsed = parseAgentTransferUri(payload, username);
+        if (parsed.valid) {
+          setPaymentRequest(null);
+          setShowPaymentModal(false);
+
+          setTimeout(() => {
+            setPaymentRequest({
+              id: Date.now().toString(),
+              amount: parsed.amount,
+              to: parsed.to,
+              token: parsed.token,
+              currency: parsed.currency,
+              memo: parsed.id,
+              human: parsed.human,
+            });
+            setShowPaymentModal(true);
+          }, 100);
+        } else {
+          setError(parsed.human);
+          setHasError(true);
+        }
+      }
+    };
 
     let cancelled = false;
 
@@ -1139,63 +1366,75 @@ export default function Chat() {
         <Modal
           visible={showPaymentModal}
           onDismiss={handleCancelPayment}
-          contentContainerStyle={{
-            backgroundColor: "#27272a",
-            margin: 20,
-            borderRadius: 16,
-            padding: 20,
-          }}
+          contentContainerStyle={styles.modalContainer}
         >
-          <Card style={{ backgroundColor: "#27272a" }} key={paymentRequest?.id || Date.now()}>
-            <Card.Title
-              title="Confirm Payment"
-              titleStyle={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}
-            />
-            <Card.Content>
-              <View style={{ marginBottom: 16 }}>
-                <Text style={{ color: "#a3a3a3", fontSize: 14, marginBottom: 4 }}>
-                  Amount
-                </Text>
-                <Text style={{ color: "#fff", fontSize: 18, fontWeight: "600" }}>
-                  {paymentRequest?.amount || "Not specified"} {paymentRequest?.token || "SOL"}
-                </Text>
+          <View style={styles.modalContent}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Confirm Payment</Text>
+            </View>
+
+            {/* Content */}
+            <View style={styles.modalBody}>
+              {/* Amount Section */}
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>Amount</Text>
+                <View style={styles.amountContainer}>
+                  <Text style={styles.amountValue}>
+                    {currencySymbol(paymentRequest?.currency) || "$"}
+                    {paymentRequest?.amount || "Not specified"}
+                  </Text>
+                </View>
+                {paymentRequest?.currency && (
+                  <Text style={styles.currencyText}>
+                    {currencyName(paymentRequest.currency)}
+                  </Text>
+                )}
               </View>
 
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ color: "#a3a3a3", fontSize: 14, marginBottom: 4 }}>
-                  To
-                </Text>
-                <Text style={{ color: "#fff", fontSize: 16, fontFamily: "monospace" }}>
+              {/* Receiver Section */}
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>Receiver</Text>
+                <Text style={styles.addressText}>
                   {paymentRequest?.to}
                 </Text>
               </View>
 
-              <View style={{ flexDirection: "row", gap: 12 }}>
-                <Button
-                  mode="outlined"
-                  onPress={handleCancelPayment}
-                  style={{
-                    flex: 1,
-                    borderColor: "#52525b",
-                  }}
-                  labelStyle={{ color: "#fff" }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  mode="contained"
-                  onPress={handleConfirmPayment}
-                  style={{
-                    flex: 1,
-                    backgroundColor: PURPLE_800,
-                  }}
-                  labelStyle={{ color: "#fff" }}
-                >
-                  Confirm
-                </Button>
+              {/* Memo Section (if exists) */}
+              {paymentRequest?.memo && (
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Memo</Text>
+                  <Text style={styles.memoText}>
+                    {paymentRequest.memo}
+                  </Text>
+                </View>
+              )}
+
+              {/* You will pay section */}
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>You will pay</Text>
+                <Text style={styles.payAmountText}>
+                  ≈ {paymentRequest?.amount || "..."} {paymentRequest?.token || "USDC"}
+                </Text>
               </View>
-            </Card.Content>
-          </Card>
+            </View>
+
+            {/* Footer Buttons */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.confirmButton}
+                onPress={handleConfirmPayment}
+              >
+                <Text style={styles.confirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={handleCancelPayment}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </Modal>
       </Portal>
     );
@@ -1440,6 +1679,11 @@ export default function Chat() {
                 placeholderTextColor="#a3a3a3"
                 blurOnSubmit={false}
                 returnKeyType="send"
+                // disable copy and paste to prevent prompt injection
+                contextMenuHidden={true}
+                selectTextOnFocus={false}
+                selectionColor="transparent"
+                onSelectionChange={() => { }}
               />
               <TouchableOpacity
                 style={[

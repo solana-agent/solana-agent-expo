@@ -6,7 +6,8 @@ import React, { useEffect, useState } from "react";
 import { Alert, Image, StyleSheet, TouchableOpacity, View } from "react-native";
 import { ActivityIndicator, Button, IconButton, Text } from "react-native-paper";
 import { PushNotificationService } from '../components/PushNotificationService';
-import { useAppStore } from '../components/Store';
+import { useAppStore } from './store/Store';
+import { disconnectChatUser } from "../config/chatConfig";
 
 const DARK_NAV = "#18181b";
 const API_URL = Constants.expoConfig?.extra?.apiUrl;
@@ -22,7 +23,7 @@ export default function AccountScreen() {
       ? wallet.wallets[0]?.address
       : null;
 
-  const { username, setUsername, avatarUrl, setAvatarUrl } = useAppStore();
+  const { username, setUsername, avatarUrl, setAvatarUrl, clearChatData } = useAppStore();
 
   // Load username and avatar on component mount
   useEffect(() => {
@@ -77,6 +78,26 @@ export default function AccountScreen() {
 
     registerPushNotifications();
   }, [user, walletAddress, getAccessToken]);
+
+  // Handle logout with store clearing
+  const handleLogout = async () => {
+    try {
+      // Clear the app store first
+      clearChatData();
+
+      // Then disconnect the chat user
+      await disconnectChatUser();
+
+      // Then logout from Privy
+      await logout();
+
+      console.log('Logged out and cleared store');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      // Still clear the store even if logout fails
+      clearChatData();
+    }
+  };
 
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
@@ -282,7 +303,7 @@ export default function AccountScreen() {
 
           <Button
             mode="contained"
-            onPress={() => logout()}
+            onPress={() => handleLogout()}
             style={styles.logoutButton}
             labelStyle={styles.logoutLabel}
             contentStyle={styles.logoutContent}

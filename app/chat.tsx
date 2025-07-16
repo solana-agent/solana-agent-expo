@@ -3,7 +3,7 @@ import React, { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { FAB, Text } from "react-native-paper";
 import { ChannelList } from "stream-chat-expo";
-import { useAppStore } from "../components/Store";
+import { useAppStore } from "./store/Store";
 import { chatClient } from "../config/chatConfig";
 
 const DARK_BG = "#18181b";
