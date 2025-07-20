@@ -40,6 +40,63 @@ interface PaymentRequest {
     link: string;
 }
 
+// Add these interfaces near the top with your existing interfaces
+interface MonthlyMetrics {
+    revenue: number; // AR - money coming in (you're receiving)
+    expenses: number; // AP - money going out (you're paying)
+    cashFlow: number; // revenue - expenses
+    currency: string; // Primary currency for display
+}
+
+// Add this state with your other state declarations
+const [monthlyMetrics, setMonthlyMetrics] = useState<MonthlyMetrics>({
+    revenue: 0,
+    expenses: 0,
+    cashFlow: 0,
+    currency: 'USD'
+});
+
+// Add this function to calculate metrics from payment requests
+const calculateMonthlyMetrics = (requests: PaymentRequest[]): MonthlyMetrics => {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    // Filter requests for current month
+    const currentMonthRequests = requests.filter(request => {
+        const requestDate = new Date(request.dueDate * 1000);
+        return requestDate.getMonth() === currentMonth &&
+            requestDate.getFullYear() === currentYear;
+    });
+
+    let revenue = 0; // Money coming to you (AR)
+    let expenses = 0; // Money going from you (AP)
+
+    currentMonthRequests.forEach(request => {
+        // Convert all amounts to USD for simplification
+        // In a real app, you'd use actual exchange rates
+        let amount = request.amount;
+
+        if (request.type === 'AR') {
+            // Accounts Receivable - money coming to you
+            if (request.status === 'paid') {
+                revenue += amount;
+            }
+        } else {
+            // Accounts Payable - money you need to pay
+            if (request.status === 'paid') {
+                expenses += amount;
+            }
+        }
+    });
+
+    return {
+        revenue,
+        expenses,
+        cashFlow: revenue - expenses,
+        currency: 'USD' // Default to USD for now
+    };
+};
+
 function currencyName(fiat: string): string {
     switch (fiat) {
         case 'AUD': return 'Australian Dollars';
@@ -157,6 +214,7 @@ export default function PaymentLinksScreen() {
         // For other currencies, keep the current token selection (don't auto-change)
     }, [currency]);
 
+    // Update the loadPaymentRequests function to calculate metrics
     const loadPaymentRequests = async () => {
         try {
             setLoadingRequests(true);
@@ -173,7 +231,12 @@ export default function PaymentLinksScreen() {
 
             if (response.ok) {
                 const data = await response.json();
-                setPaymentRequests(data.requests || []);
+                const requests = data.requests || [];
+                setPaymentRequests(requests);
+
+                // Calculate and set monthly metrics
+                const metrics = calculateMonthlyMetrics(requests);
+                setMonthlyMetrics(metrics);
             }
         } catch (error) {
             console.error('Error loading payment requests:', error);
@@ -181,6 +244,28 @@ export default function PaymentLinksScreen() {
             setLoadingRequests(false);
         }
     };
+
+    const MetricsCard = ({ title, amount, currency, color, icon }: {
+        title: string;
+        amount: number;
+        currency: string;
+        color: string;
+        icon: string;
+    }) => (
+        <View style={[styles.metricCard, { borderLeftColor: color }]}>
+            <View style={styles.metricHeader}>
+                <Icon name={icon} size={20} color={color} />
+                <Text style={styles.metricTitle}>{title}</Text>
+            </View>
+            <Text style={[styles.metricAmount, { color }]}>
+                ${Math.abs(amount).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                })}
+            </Text>
+            <Text style={styles.metricCurrency}>{currency}</Text>
+        </View>
+    );
 
     const handleUserSelect = (user: any) => {
         setSelectedUser(user);
@@ -400,7 +485,7 @@ export default function PaymentLinksScreen() {
                         },
                         {
                             value: 'created',
-                            label: 'Created',
+                            label: 'Track',
                             icon: 'format-list-bulleted',
                         },
                     ]}
@@ -425,7 +510,6 @@ export default function PaymentLinksScreen() {
                         </View>
                     ) : (
                         <>
-                            {/* Your existing Create form JSX goes here - same as before */}
                             {/* Payee Selection */}
                             <View style={styles.section}>
                                 <Text style={styles.label}>To (Payee) *</Text>
@@ -450,15 +534,267 @@ export default function PaymentLinksScreen() {
                                 )}
                             </View>
 
-                            {/* Continue with the rest of your form fields... */}
-                            {/* Currency, Amount, Token, Due Date, External ID, Attachments, Generate Button, Generated Link */}
-                            {/* (I'll truncate here for space, but include all your existing form fields) */}
+                            {/* Currency Selection */}
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Currency *</Text>
+                                <Menu
+                                    visible={currencyMenuVisible}
+                                    onDismiss={() => setCurrencyMenuVisible(false)}
+                                    contentStyle={styles.menuContent}
+                                    anchor={
+                                        <TouchableOpacity
+                                            style={styles.dropdown}
+                                            onPress={() => setCurrencyMenuVisible(true)}
+                                        >
+                                            <Text style={styles.dropdownText}>
+                                                {currencyName(currency)}
+                                            </Text>
+                                            <Icon name="chevron-down" size={20} color="#a1a1aa" />
+                                        </TouchableOpacity>
+                                    }
+                                >
+                                    <ScrollView style={{ maxHeight: 200 }}>
+                                        {ALLOWED_FIAT.map((fiat) => (
+                                            <Menu.Item
+                                                key={fiat}
+                                                onPress={() => {
+                                                    setCurrency(fiat);
+                                                    setCurrencyMenuVisible(false);
+                                                }}
+                                                title={currencyName(fiat)}
+                                                titleStyle={styles.menuItemText}
+                                            />
+                                        ))}
+                                    </ScrollView>
+                                </Menu>
+                            </View>
+
+                            {/* Amount Input */}
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Amount *</Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    value={amount}
+                                    onChangeText={handleAmountChange}
+                                    placeholder="0.00"
+                                    keyboardType="decimal-pad"
+                                    mode="outlined"
+                                    theme={{
+                                        colors: {
+                                            primary: '#3b82f6',
+                                            background: DARK_CARD,
+                                            surface: DARK_CARD,
+                                            outline: DARK_BORDER,
+                                            onSurface: '#ffffff',
+                                            placeholder: '#a1a1aa',
+                                        },
+                                    }}
+                                />
+                            </View>
+
+                            {/* Token Selection (only show if not USD/EUR) */}
+                            {currency !== 'USD' && currency !== 'EUR' && (
+                                <View style={styles.section}>
+                                    <Text style={styles.label}>Token</Text>
+                                    <Menu
+                                        visible={tokenMenuVisible}
+                                        onDismiss={() => setTokenMenuVisible(false)}
+                                        contentStyle={styles.menuContent}
+                                        anchor={
+                                            <TouchableOpacity
+                                                style={styles.dropdown}
+                                                onPress={() => setTokenMenuVisible(true)}
+                                            >
+                                                <Text style={styles.dropdownText}>{token}</Text>
+                                                <Icon name="chevron-down" size={20} color="#a1a1aa" />
+                                            </TouchableOpacity>
+                                        }
+                                    >
+                                        <Menu.Item
+                                            onPress={() => {
+                                                setToken('USDC');
+                                                setTokenMenuVisible(false);
+                                            }}
+                                            title="USDC"
+                                            titleStyle={styles.menuItemText}
+                                        />
+                                        <Menu.Item
+                                            onPress={() => {
+                                                setToken('EURC');
+                                                setTokenMenuVisible(false);
+                                            }}
+                                            title="EURC"
+                                            titleStyle={styles.menuItemText}
+                                        />
+                                    </Menu>
+                                </View>
+                            )}
+
+                            {/* Due Date */}
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Due Date *</Text>
+                                <View style={styles.dateTimeContainer}>
+                                    <TouchableOpacity
+                                        style={[styles.dropdown, { flex: 1, marginRight: 8 }]}
+                                        onPress={() => setShowDatePicker(true)}
+                                    >
+                                        <Text style={styles.dropdownText}>
+                                            {dueDate.toLocaleDateString()}
+                                        </Text>
+                                        <Icon name="calendar" size={20} color="#a1a1aa" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.dropdown, { flex: 1 }]}
+                                        onPress={() => setShowTimePicker(true)}
+                                    >
+                                        <Text style={styles.dropdownText}>
+                                            {dueDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </Text>
+                                        <Icon name="clock" size={20} color="#a1a1aa" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* External ID */}
+                            <View style={styles.section}>
+                                <Text style={styles.label}>External ID</Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    value={externalId}
+                                    onChangeText={setExternalId}
+                                    placeholder="Optional reference ID"
+                                    mode="outlined"
+                                    theme={{
+                                        colors: {
+                                            primary: '#3b82f6',
+                                            background: DARK_CARD,
+                                            surface: DARK_CARD,
+                                            outline: DARK_BORDER,
+                                            onSurface: '#ffffff',
+                                            placeholder: '#a1a1aa',
+                                        },
+                                    }}
+                                />
+                            </View>
+
+                            {/* File Attachments */}
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Attachments</Text>
+                                <TouchableOpacity style={styles.uploadButton} onPress={handleFileUpload}>
+                                    <Icon name="paperclip" size={20} color="#3b82f6" />
+                                    <Text style={styles.uploadButtonText}>Attach File</Text>
+                                </TouchableOpacity>
+
+                                {attachedFiles.map((file, index) => (
+                                    <View key={index} style={styles.fileItem}>
+                                        <Icon name="file" size={16} color="#a1a1aa" />
+                                        <Text style={styles.fileName}>{file.name}</Text>
+                                        <TouchableOpacity onPress={() => removeFile(index)}>
+                                            <Icon name="close" size={16} color="#ef4444" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+
+                            {/* Generate Link Button */}
+                            <View style={styles.section}>
+                                <Button
+                                    mode="contained"
+                                    onPress={generatePaymentLink}
+                                    loading={loading}
+                                    disabled={loading || !selectedUser || !amount || !currency}
+                                    style={styles.generateButton}
+                                    labelStyle={styles.generateButtonText}
+                                >
+                                    Generate Payment Link
+                                </Button>
+                            </View>
+
+                            {/* Generated Link */}
+                            {generatedLink && (
+                                <View style={styles.section}>
+                                    <Text style={styles.label}>Payment Link</Text>
+                                    <View style={styles.linkContainer}>
+                                        <Text style={styles.linkText}>{generatedLink}</Text>
+                                        <TouchableOpacity style={styles.copyButton} onPress={copyLink}>
+                                            <Icon name="content-copy" size={20} color="#3b82f6" />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* Success message and actions */}
+                                    <View style={styles.successActions}>
+                                        <Text style={styles.successText}>
+                                            ✅ Payment link created! Share this link with {selectedUser?.name || selectedUser?.id} to request payment.
+                                        </Text>
+                                        <View style={styles.actionButtons}>
+                                            <Button
+                                                mode="outlined"
+                                                onPress={() => setSelectedTab('created')}
+                                                style={styles.viewCreatedButton}
+                                                labelStyle={styles.viewCreatedButtonText}
+                                            >
+                                                View All Created
+                                            </Button>
+                                            <Button
+                                                mode="text"
+                                                onPress={resetForm}
+                                                labelStyle={styles.resetButtonText}
+                                            >
+                                                Create Another
+                                            </Button>
+                                        </View>
+                                    </View>
+                                </View>
+                            )}
                         </>
                     )}
                 </ScrollView>
             ) : (
                 // Created Links Tab
                 <View style={styles.content}>
+                    {/* Monthly Metrics Section */}
+                    <View style={styles.metricsSection}>
+                        <View style={styles.metricsHeader}>
+                            <Text style={styles.metricsTitle}>This Month</Text>
+                            <TouchableOpacity
+                                style={styles.refreshButton}
+                                onPress={loadPaymentRequests}
+                                disabled={loadingRequests}
+                            >
+                                <Icon
+                                    name={loadingRequests ? "loading" : "refresh"}
+                                    size={20}
+                                    color="#3b82f6"
+                                />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.metricsGrid}>
+                            <MetricsCard
+                                title="Revenue (AR)"
+                                amount={monthlyMetrics.revenue}
+                                currency={monthlyMetrics.currency}
+                                color="#10b981"
+                                icon="trending-up"
+                            />
+                            <MetricsCard
+                                title="Expenses (AP)"
+                                amount={monthlyMetrics.expenses}
+                                currency={monthlyMetrics.currency}
+                                color="#ef4444"
+                                icon="trending-down"
+                            />
+                            <MetricsCard
+                                title="Cash Flow"
+                                amount={monthlyMetrics.cashFlow}
+                                currency={monthlyMetrics.currency}
+                                color={monthlyMetrics.cashFlow >= 0 ? "#10b981" : "#ef4444"}
+                                icon={monthlyMetrics.cashFlow >= 0 ? "cash-plus" : "cash-minus"}
+                            />
+                        </View>
+                    </View>
+
+                    {/* Payment Requests List */}
                     {loadingRequests ? (
                         <View style={styles.centerContent}>
                             <ActivityIndicator size="large" color="#3b82f6" />
@@ -769,5 +1105,58 @@ const styles = StyleSheet.create({
     },
     copyButton: {
         padding: 8,
+    },
+    metricsSection: {
+        marginBottom: 20,
+    },
+    metricsHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    metricsTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#ffffff',
+    },
+    refreshButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: DARK_CARD,
+        borderWidth: 1,
+        borderColor: DARK_BORDER,
+    },
+    metricsGrid: {
+        gap: 12,
+    },
+    metricCard: {
+        backgroundColor: DARK_CARD,
+        borderRadius: 12,
+        padding: 16,
+        borderLeftWidth: 4,
+        borderColor: DARK_BORDER,
+        borderWidth: 1,
+    },
+    metricHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    metricTitle: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#a1a1aa',
+        marginLeft: 8,
+    },
+    metricAmount: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        marginBottom: 4,
+    },
+    metricCurrency: {
+        fontSize: 12,
+        color: '#71717a',
+        textTransform: 'uppercase',
     },
 });
