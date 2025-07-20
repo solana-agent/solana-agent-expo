@@ -720,30 +720,6 @@ export default function PaymentLinksScreen() {
                                             <Icon name="content-copy" size={20} color="#3b82f6" />
                                         </TouchableOpacity>
                                     </View>
-
-                                    {/* Success message and actions */}
-                                    <View style={styles.successActions}>
-                                        <Text style={styles.successText}>
-                                            ✅ Payment link created! Share this link with {selectedUser?.name || selectedUser?.id} to request payment.
-                                        </Text>
-                                        <View style={styles.actionButtons}>
-                                            <Button
-                                                mode="outlined"
-                                                onPress={() => setSelectedTab('created')}
-                                                style={styles.viewCreatedButton}
-                                                labelStyle={styles.viewCreatedButtonText}
-                                            >
-                                                View All Created
-                                            </Button>
-                                            <Button
-                                                mode="text"
-                                                onPress={resetForm}
-                                                labelStyle={styles.resetButtonText}
-                                            >
-                                                Create Another
-                                            </Button>
-                                        </View>
-                                    </View>
                                 </View>
                             )}
                         </>
