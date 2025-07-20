@@ -1,3 +1,4 @@
+import { useEmbeddedSolanaWallet } from "@privy-io/expo";
 import Constants from "expo-constants";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, TextInput, View } from "react-native";
@@ -23,6 +24,13 @@ export const UsernameSetup: React.FC<UsernameSetupProps> = ({
     const [username, setUsername] = useState("");
     const [error, setError] = useState("");
     const [creating, setCreating] = useState(false);
+
+    const wallet = useEmbeddedSolanaWallet();
+
+    const walletAddress =
+        wallet?.wallets && wallet.wallets.length > 0 && wallet.wallets[0]?.address
+            ? wallet.wallets[0]?.address
+            : null;
 
     // Auto-generate username from display name
     useEffect(() => {
@@ -135,6 +143,7 @@ export const UsernameSetup: React.FC<UsernameSetupProps> = ({
                 body: JSON.stringify({
                     username: username.toLowerCase(),
                     displayName: displayName.trim(), // Add display name to API call
+                    walletAddress: walletAddress, // Include wallet address
                 }),
             });
 
