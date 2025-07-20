@@ -297,12 +297,20 @@ export default function PaymentLinksScreen() {
     const handleFileUpload = async () => {
         try {
             const result = await DocumentPicker.getDocumentAsync({
-                type: '*/*',
+                type: 'application/pdf', // Only allow PDF files
                 copyToCacheDirectory: true,
             });
 
             if (!result.canceled && result.assets[0]) {
-                setAttachedFiles([...attachedFiles, result.assets[0]]);
+                const file = result.assets[0];
+
+                // Double-check the file type (extra validation)
+                if (file.mimeType !== 'application/pdf' && !file.name?.toLowerCase().endsWith('.pdf')) {
+                    Alert.alert('Invalid File Type', 'Only PDF files are supported.');
+                    return;
+                }
+
+                setAttachedFiles([...attachedFiles, file]);
             }
         } catch (error) {
             console.error('Error picking document:', error);
@@ -329,29 +337,53 @@ export default function PaymentLinksScreen() {
                 throw new Error('No access token available');
             }
 
-            // Prepare the payment request data
-            const paymentData = {
-                payee: selectedUser.id, // Who should receive the payment
-                payer: username, // Who created the payment request (you)
-                amount: parseFloat(amount),
+            let response;
+
+            // Use FormData for file uploads
+            const formData = new FormData();
+
+            // Add payment data fields
+            formData.append('payee', selectedUser.id);
+            formData.append('payer', username);
+            formData.append('amount', amount);
+            formData.append('currency', currency);
+            formData.append('token', token);
+            formData.append('dueDate', Math.floor(dueDate.getTime() / 1000).toString());
+
+            if (externalId) {
+                formData.append('externalId', externalId);
+            }
+
+            formData.append('memo', `Payment request from ${username} to ${selectedUser.name || selectedUser.id}`);
+
+            // Add files
+            attachedFiles.forEach((file, index) => {
+                formData.append(`attachments`, {
+                    uri: file.uri,
+                    type: file.mimeType || 'application/pdf',
+                    name: file.name || `attachment_${index}`,
+                } as any);
+            });
+
+            console.log('Creating payment request with files:', {
+                payee: selectedUser.id,
+                payer: username,
+                amount: amount,
                 currency: currency,
                 token: token,
-                dueDate: Math.floor(dueDate.getTime() / 1000), // Convert to Unix timestamp
+                dueDate: Math.floor(dueDate.getTime() / 1000),
                 externalId: externalId || null,
-                attachments: attachedFiles.length > 0 ? attachedFiles : null,
-                memo: `Payment request from ${username} to ${selectedUser.name || selectedUser.id}`,
-            };
+                filesCount: attachedFiles.length
+            });
 
-            console.log('Creating payment request:', paymentData);
-
-            // Send to your backend API
-            const response = await fetch(`${API_URL}/payment/create-request`, {
+            // Send multipart request
+            response = await fetch(`${API_URL}/payment/create-request`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'multipart/form-data',
                 },
-                body: JSON.stringify(paymentData),
+                body: formData,
             });
 
             if (!response.ok) {
@@ -681,14 +713,19 @@ export default function PaymentLinksScreen() {
                             <View style={styles.section}>
                                 <Text style={styles.label}>Attachments</Text>
                                 <TouchableOpacity style={styles.uploadButton} onPress={handleFileUpload}>
-                                    <Icon name="paperclip" size={20} color="#3b82f6" />
-                                    <Text style={styles.uploadButtonText}>Attach File</Text>
+                                    <Icon name="file-pdf-box" size={20} color="#3b82f6" />
+                                    <Text style={styles.uploadButtonText}>Attach PDF (max 100MB)</Text>
                                 </TouchableOpacity>
 
                                 {attachedFiles.map((file, index) => (
                                     <View key={index} style={styles.fileItem}>
-                                        <Icon name="file" size={16} color="#a1a1aa" />
-                                        <Text style={styles.fileName}>{file.name}</Text>
+                                        <Icon name="file-pdf-box" size={16} color="#ef4444" />
+                                        <View style={styles.fileInfo}>
+                                            <Text style={styles.fileName}>{file.name}</Text>
+                                            <Text style={styles.fileSize}>
+                                                {file.size ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : 'Size unknown'}
+                                            </Text>
+                                        </View>
                                         <TouchableOpacity onPress={() => removeFile(index)}>
                                             <Icon name="close" size={16} color="#ef4444" />
                                         </TouchableOpacity>
@@ -1134,5 +1171,14 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#71717a',
         textTransform: 'uppercase',
+    },
+    fileInfo: {
+        flex: 1,
+        marginLeft: 8,
+    },
+    fileSize: {
+        color: '#a1a1aa',
+        fontSize: 12,
+        marginTop: 2,
     },
 });
