@@ -149,6 +149,15 @@ function AppContent() {
         }}
       />
       <Tabs.Screen
+        name="link"
+        options={{
+          title: "Link",
+          tabBarIcon: ({ color }: { color: string }) => (
+            <Appbar.Action icon="link" iconColor={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="account"
         options={{
           title: "Account",
