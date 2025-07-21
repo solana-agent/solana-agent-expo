@@ -18,6 +18,7 @@ import {
   Linking,
   Text as RNText,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -52,196 +53,6 @@ const BLUE_400 = "#60a5fa";
 const DARK_BG = "#18181b";
 const DARK_OVERLAY = "rgba(24,24,27,0.85)";
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: DARK_BG },
-  card: { marginVertical: 10, marginHorizontal: 16 },
-  inputContainer: {
-    flexDirection: "row",
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderColor: "#27272a",
-    backgroundColor: DARK_BG,
-  },
-  loginButton: {
-    backgroundColor: "#6d28d9",
-    width: 220,
-    height: 64,
-    borderRadius: 16,
-    justifyContent: "center",
-    marginTop: 24,
-  },
-  loginLabel: {
-    color: "#fff",
-    fontSize: 22,
-    padding: 8,
-    fontWeight: "bold",
-    letterSpacing: 1,
-  },
-  loginContent: {
-    height: 64,
-  },
-  textInput: {
-    flex: 1,
-    marginRight: 8,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    backgroundColor: "#27272a",
-    color: "#fff",
-    height: 54,
-    fontSize: 18,
-  },
-  sendButton: {
-    borderRadius: 24,
-    width: 54,
-    height: 54,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: BLUE_400,
-  },
-  sendButtonDisabled: {
-    backgroundColor: "#52525b",
-  },
-  error: { color: "#f87171", alignSelf: "center", fontSize: 14, margin: 10 },
-  spinnerOverlay: {
-    position: "absolute",
-    top: 0, left: 0, right: 0, bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: DARK_OVERLAY,
-    zIndex: 100,
-  },
-  flatListContent: {
-    flexGrow: 1,
-    justifyContent: "flex-end",
-    paddingBottom: 8,
-  },
-  youCard: {
-    backgroundColor: BLUE_400,
-    borderRadius: 12,
-  },
-  agentCard: {
-    backgroundColor: PURPLE_800,
-    borderRadius: 12,
-  },
-  youText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  agentText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  modalContainer: {
-    margin: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: "#1f2937", // gray-800
-    borderRadius: 12,
-    padding: 24,
-    width: '100%',
-    maxWidth: 420,
-    borderWidth: 1,
-    borderColor: "#374151", // gray-700
-  },
-  modalHeader: {
-    marginBottom: 24,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    textAlign: 'center',
-  },
-  modalBody: {
-    marginBottom: 24,
-  },
-  infoSection: {
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  infoLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#d1d5db', // gray-300
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  amountContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-  },
-  amountValue: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  tokenText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  currencyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginTop: 4,
-  },
-  addressText: {
-    fontFamily: 'monospace',
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
-    textAlign: 'center',
-    flexWrap: 'wrap',
-  },
-  memoText: {
-    fontSize: 14,
-    color: '#d1d5db',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  payAmountText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#ffffff',
-    textAlign: 'center',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  confirmButton: {
-    flex: 1,
-    backgroundColor: '#3b82f6', // blue-500
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  confirmButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#374151', // gray-700
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
-
 type ChatMessage = {
   id: string;
   user_message: string;
@@ -257,14 +68,29 @@ type ChatHistory = {
   total_pages: number;
 };
 
+// Update the PaymentRequest interface to match the backend structure
 type PaymentRequest = {
   id: string;
-  amount: string | null;
-  to: string;
-  token: string | null;
-  memo: string | null;
-  currency: string | null;
+  amount: number;
+  currency: string;
+  token: string;
+  payee: string;
+  payer: string;
+  dueDate: number;
+  status: 'outstanding' | 'accepted' | 'paid' | 'rejected' | 'expired';
+  type: 'AR' | 'AP';
+  externalId?: string;
+  memo?: string;
+  createdAt: string;
+  link: string;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    url: string;
+    size: number;
+  }>;
   human: string;
+  to?: string;
 };
 
 function isWalletDelegated(user: PrivyUser | null) {
@@ -577,185 +403,99 @@ function currencyName(fiat: string | undefined): string {
   }
 }
 
-// --- Agent transfer URI parser for amount, to, token, memo ---
+// Update the parseAgentTransferUri function to handle new link format
 function parseAgentTransferUri(uri: string, username: string | null): {
-  amount: string | null;
-  to: string;
-  token: string | null;
-  currency: string | null;
-  id: string | null;
-  human: string;
+  paymentId: string | null;
   valid: boolean;
+  human: string;
 } {
   try {
     console.log('Parsing URI:', uri);
 
-    let currency: string | null = null;
-    let to: string = "";
-    let token: string | null = null;
-    let id: string | null = null;
-    let amount: string | null = null;
+    let paymentId: string | null = null;
 
     // Clean up the URI of non-ASCII characters
     uri = uri.replace(/[^\x00-\x7F]/g, '');
 
-    // Handle Universal Links
-    if (uri.startsWith("https://sol-pay.co/pay")) {
+    // Handle Universal Links for payment requests: https://sol-pay.co/pay/{paymentId}
+    if (uri.startsWith("https://sol-pay.co/pay/")) {
       try {
         const url = new URL(uri);
-        const params = new URLSearchParams(url.search);
-        amount = params.get("a");
-        to = params.get("to")?.toLowerCase() || "";
-        token = params.get("t") || "USDC";
-        currency = params.get("c")?.toUpperCase() || "USD";
-        id = params.get("id") || null;
+        const pathParts = url.pathname.split('/');
+        paymentId = pathParts[pathParts.length - 1]; // Get the last part (payment ID)
 
-        console.log('Universal Link - Parsed params:', { amount, to, token, currency, id });
+        console.log('Universal Link - Parsed payment ID:', paymentId);
       } catch (error) {
         console.error('Error parsing Universal Link:', error);
         return {
-          amount: null,
-          to: "",
-          token: null,
-          currency: null,
-          id: null,
-          human: "Invalid URI: unable to parse Universal Link",
+          paymentId: null,
+          human: "Invalid payment link: unable to parse",
           valid: false,
         };
       }
     }
-    // Handle custom scheme: agent://pay?...
-    else if (uri.startsWith("agent://pay")) {
-      const withoutScheme = uri.replace("agent://", "");
-      const [command, queryString] = withoutScheme.split("?");
-
-      console.log('Custom scheme - Command:', command, 'Query:', queryString);
-
-      if (command !== "pay") {
-        return {
-          amount: null,
-          to: "",
-          token: null,
-          currency: null,
-          id: null,
-          human: "Invalid URI: must use agent://pay command",
-          valid: false,
-        };
-      }
-
-      const params = new URLSearchParams(queryString || "");
-      amount = params.get("a") || null;
-      to = params.get("to")?.toLowerCase() || "";
-      token = params.get("t") || "USDC"; // Default to USDC if not specified
-      const memo = params.get("m") || null;
-      currency = params.get("c")?.toUpperCase() || "USD"; // Default to USD if not specified
-      id = params.get("id") || null;
-
-      console.log('Custom scheme - Parsed params:', { amount, to, token, memo, currency, id });
+    // Handle custom scheme: agent://pay/{paymentId}
+    else if (uri.startsWith("agent://pay/")) {
+      paymentId = uri.replace("agent://pay/", "");
+      console.log('Custom scheme - Parsed payment ID:', paymentId);
     }
     else {
       return {
-        amount: null,
-        to: "",
-        token: null,
-        id: null,
-        currency: null,
-        human: "Invalid URI: must start with agent://pay or https://sol-pay.co/pay",
+        paymentId: null,
+        human: "Invalid URI: must be a payment request link",
         valid: false,
       };
     }
 
-    if (!to) {
+    if (!paymentId) {
       return {
-        amount: null,
-        to: "",
-        token: null,
-        id: null,
-        currency: null,
-        human: "Invalid URI: recipient (to) is required",
+        paymentId: null,
+        human: "Invalid URI: payment ID is required",
         valid: false,
       };
     }
-
-    if (!to.startsWith("@")) {
-      to = "@" + to;
-    }
-
-    if (!token) {
-      token = 'USDC';
-      if (currency === 'EUR') {
-        token = 'EURC';
-      }
-    }
-    if (token === 'USDC' && currency === 'EUR') {
-      token = 'EURC';
-    }
-    if (token === 'EURC' && currency === 'USD') {
-      token = 'USDC';
-    }
-
-    if (token !== 'USDC' && token !== 'EURC') {
-      return {
-        amount: null,
-        to: "",
-        token: null,
-        id: null,
-        currency: null,
-        human: "Invalid URI: token must be USDC or EURC",
-        valid: false,
-      };
-    }
-
-    if (!currency || !ALLOWED_FIAT.includes(currency)) {
-      return {
-        amount: null,
-        to: "",
-        token: null,
-        id: null,
-        currency: null,
-        human: "Invalid URI: currency must be one of " + ALLOWED_FIAT.join(", "),
-        valid: false,
-      };
-    }
-
-    //TODO validate that the username exists in the system
-
-    // Build human readable string
-    let human = `Send `;
-    human += amount ? `${amount} ` : "";
-    human += `${token} to ${to}`;
-    if (id) {
-      const j = { "id": id, "currency": currency, "amount": amount, "to": to, "from": `@${username}` || "unknown" };
-      human += ` with a memo of '${JSON.stringify(j)}'`;
-    } else {
-      const j = { "currency": currency, "amount": amount, "to": to, "from": `@${username}` || "unknown" };
-      human += ` with a memo of '${JSON.stringify(j)}'`;
-    }
-
-    console.log('Generated human command:', human);
 
     return {
-      amount,
-      to,
-      token,
-      currency,
-      id,
-      human,
+      paymentId,
+      human: `Loading payment request: ${paymentId}`,
       valid: true,
     };
   } catch (error) {
     console.error('Error parsing URI:', error);
     return {
-      amount: null,
-      to: "",
-      token: null,
-      id: null,
-      currency: null,
-      human: "Invalid Pay URI",
+      paymentId: null,
+      human: "Invalid payment link",
       valid: false,
     };
   }
 }
+
+// Add function to fetch payment request details
+const fetchPaymentRequest = async (paymentId: string, getAccessToken: () => Promise<string | null>): Promise<PaymentRequest | null> => {
+  try {
+    const jwt = await getAccessToken();
+    if (!jwt) return null;
+
+    const response = await fetch(`${API_URL}/payment/request/${paymentId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${jwt}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch payment request:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.request;
+  } catch (error) {
+    console.error('Error fetching payment request:', error);
+    return null;
+  }
+};
 
 export default function Chat() {
   // Get URL params from Expo Router
@@ -785,6 +525,9 @@ export default function Chat() {
   // Deep link handling - separate from pending NFC
   const [pendingDeepLinkParams, setPendingDeepLinkParams] = useState<any>(null);
   const [deepLinkProcessed, setDeepLinkProcessed] = useState(false);
+
+  // Add loading state for payment requests
+  const [loadingPaymentRequest, setLoadingPaymentRequest] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -974,7 +717,7 @@ export default function Chat() {
         id: Date.now().toString(),
         ...pendingDeepLinkParams,
         human,
-      });
+      } as PaymentRequest);
       setShowPaymentModal(true);
 
       // Clear the pending params
@@ -1123,25 +866,107 @@ export default function Chat() {
   };
 
   // Payment confirmation handlers
-  const handleConfirmPayment = () => {
-    console.log('Confirm button pressed', { paymentRequest });
+  const handleAcceptPayment = async () => {
+    if (!paymentRequest?.id) {
+      console.error('No payment request ID');
+      return;
+    }
 
-    if (paymentRequest) {
-      // Build the complete command including memo if present
-      let command = `Send `;
-      command += paymentRequest.amount ? `${paymentRequest.amount} ` : "";
-      command += `${paymentRequest.token || "SOL"} to ${paymentRequest.to}`;
-      if (paymentRequest.memo) {
-        command += ` with a memo of '${paymentRequest.memo}'`;
+    setLoadingPaymentRequest(true);
+
+    try {
+      const jwt = await getAccessToken();
+      if (!jwt) {
+        throw new Error('No access token available');
       }
 
-      console.log('Sending command:', command);
-      sendTextMessage(command);
+      const response = await fetch(`${API_URL}/payment/request/${paymentRequest.id}/accept`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${jwt}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to accept payment request');
+      }
+
+      const result = await response.json();
+      console.log('Payment request accepted:', result);
+
+      Alert.alert('Success', 'Payment request accepted! The payment will be processed.');
+
       setShowPaymentModal(false);
       setPaymentRequest(null);
-    } else {
-      console.log('No payment request found');
+
+    } catch (error) {
+      console.error('Error accepting payment request:', error);
+      Alert.alert('Error', `Failed to accept payment request: ${error}`);
+    } finally {
+      setLoadingPaymentRequest(false);
     }
+  };
+
+  const handleDenyPayment = async () => {
+    if (!paymentRequest?.id) {
+      console.error('No payment request ID');
+      return;
+    }
+
+    // Show confirmation dialog first
+    Alert.alert(
+      'Deny Payment Request',
+      'Are you sure you want to deny this payment request?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Deny',
+          style: 'destructive',
+          onPress: async () => {
+            setLoadingPaymentRequest(true);
+
+            try {
+              const jwt = await getAccessToken();
+              if (!jwt) {
+                throw new Error('No access token available');
+              }
+
+              const response = await fetch(`${API_URL}/payment/request/${paymentRequest.id}/deny`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${jwt}`,
+                  'Content-Type': 'application/json',
+                },
+              });
+
+              if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to deny payment request');
+              }
+
+              const result = await response.json();
+              console.log('Payment request denied:', result);
+
+              Alert.alert('Payment Denied', 'The payment request has been denied.');
+
+              setShowPaymentModal(false);
+              setPaymentRequest(null);
+
+            } catch (error) {
+              console.error('Error denying payment request:', error);
+              Alert.alert('Error', `Failed to deny payment request: ${error}`);
+            } finally {
+              setLoadingPaymentRequest(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleCancelPayment = () => {
@@ -1149,32 +974,51 @@ export default function Chat() {
     setPaymentRequest(null);
   };
 
-  // NFC handling
+  // Update NFC handling
   useEffect(() => {
     // Only handle NFC if user is authenticated, delegated, biometric auth passed, and chat connected
     if (!user || !alreadyDelegated || !biometricAuthenticated || !username || !chatConnected) return;
 
-    const handlePaymentRequest = (source: string, payload: string) => {
+    const handlePaymentRequest = async (source: string, payload: string) => {
       console.log(`${source} payment request:`, payload);
 
-      if (payload.startsWith("agent://pay") || payload.startsWith("https://wallet.solana-agent.com/pay") || payload.startsWith("https://sol-pay.co/pay")) {
+      if (payload.startsWith("agent://pay/") || payload.startsWith("https://sol-pay.co/pay/")) {
         const parsed = parseAgentTransferUri(payload, username);
-        if (parsed.valid) {
-          setPaymentRequest(null);
-          setShowPaymentModal(false);
+        if (parsed.valid && parsed.paymentId) {
+          setLoadingPaymentRequest(true);
 
-          setTimeout(() => {
-            setPaymentRequest({
-              id: Date.now().toString(),
-              amount: parsed.amount,
-              to: parsed.to,
-              token: parsed.token,
-              currency: parsed.currency,
-              memo: parsed.id,
-              human: parsed.human,
-            });
-            setShowPaymentModal(true);
-          }, 100);
+          try {
+            const paymentData = await fetchPaymentRequest(parsed.paymentId, getAccessToken);
+
+            if (paymentData) {
+              // Check if this is a request TO the current user (they need to pay)
+              const isPayerRequest = paymentData.payee.toLowerCase() === username.toLowerCase();
+
+              if (isPayerRequest && paymentData.status === 'outstanding') {
+                setPaymentRequest({
+                  ...paymentData,
+                  to: paymentData.payer, // They're paying TO the payer (request creator)
+                  human: `Pay ${paymentData.amount} ${paymentData.currency} to ${paymentData.payer}`,
+                } as PaymentRequest);
+                setShowPaymentModal(true);
+              } else if (!isPayerRequest) {
+                setError("This payment request is not for you.");
+                setHasError(true);
+              } else {
+                setError(`This payment request is ${paymentData.status}.`);
+                setHasError(true);
+              }
+            } else {
+              setError("Payment request not found or expired.");
+              setHasError(true);
+            }
+          } catch (error) {
+            console.error('Error loading payment request:', error);
+            setError("Failed to load payment request.");
+            setHasError(true);
+          } finally {
+            setLoadingPaymentRequest(false);
+          }
         } else {
           setError(parsed.human);
           setHasError(true);
@@ -1206,7 +1050,7 @@ export default function Chat() {
               const payload = Ndef.text.decodePayload(ndefRecord.payload as unknown as Uint8Array);
               console.log('NFC Payload:', payload);
 
-              handlePaymentRequest('NFC', payload);
+              await handlePaymentRequest('NFC', payload);
             } catch (error) {
               console.error('Error processing NFC tag:', error);
             }
@@ -1267,7 +1111,7 @@ export default function Chat() {
         console.log('Error unregistering NFC:', error);
       });
     };
-  }, [user, alreadyDelegated, biometricAuthenticated, username, chatConnected]);
+  }, [user, alreadyDelegated, biometricAuthenticated, username, chatConnected, getAccessToken]);
 
   // WebSocket connection and auto-reconnect
   useEffect(() => {
@@ -1354,12 +1198,9 @@ export default function Chat() {
     };
   }, [user?.id, isReady, getAccessToken, alreadyDelegated, isConnected, username, chatConnected]);
 
-  // Payment Confirmation Modal
+  // Update Payment Confirmation Modal to show all payment request details
   const PaymentConfirmationModal = () => {
-    console.log('PaymentConfirmationModal render:', {
-      showPaymentModal,
-      paymentRequest
-    });
+    const request = paymentRequest as any;
 
     return (
       <Portal>
@@ -1371,42 +1212,91 @@ export default function Chat() {
           <View style={styles.modalContent}>
             {/* Header */}
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Confirm Payment</Text>
+              <Text style={styles.modalTitle}>Payment Request</Text>
             </View>
 
-            {/* Content */}
+            {/* Content - same as before */}
             <View style={styles.modalBody}>
               {/* Amount Section */}
               <View style={styles.infoSection}>
                 <Text style={styles.infoLabel}>Amount</Text>
                 <View style={styles.amountContainer}>
                   <Text style={styles.amountValue}>
-                    {currencySymbol(paymentRequest?.currency) || "$"}
-                    {paymentRequest?.amount || "Not specified"}
+                    {currencySymbol(request?.currency) || "$"}
+                    {request?.amount || "Not specified"}
                   </Text>
                 </View>
-                {paymentRequest?.currency && (
+                {request?.currency && (
                   <Text style={styles.currencyText}>
-                    {currencyName(paymentRequest.currency)}
+                    {currencyName(request.currency)}
                   </Text>
                 )}
               </View>
 
-              {/* Receiver Section */}
+              {/* Requesting User Section */}
               <View style={styles.infoSection}>
-                <Text style={styles.infoLabel}>Receiver</Text>
+                <Text style={styles.infoLabel}>Requesting Payment</Text>
                 <Text style={styles.addressText}>
-                  {paymentRequest?.to}
+                  {request?.to || request?.payer}
                 </Text>
               </View>
 
-              {/* Memo Section (if exists) */}
-              {paymentRequest?.memo && (
+              {/* Due Date Section */}
+              {request?.dueDate && (
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Due Date</Text>
+                  <Text style={styles.memoText}>
+                    {new Date(request.dueDate * 1000).toLocaleDateString()}
+                  </Text>
+                </View>
+              )}
+
+              {/* External ID Section */}
+              {request?.externalId && (
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Reference ID</Text>
+                  <Text style={styles.memoText}>
+                    {request.externalId}
+                  </Text>
+                </View>
+              )}
+
+              {/* Memo Section */}
+              {request?.memo && (
                 <View style={styles.infoSection}>
                   <Text style={styles.infoLabel}>Memo</Text>
                   <Text style={styles.memoText}>
-                    {paymentRequest.memo}
+                    {request.memo}
                   </Text>
+                </View>
+              )}
+
+              {/* Attachments Section */}
+              {request?.attachments && request.attachments.length > 0 && (
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Attachments</Text>
+                  <ScrollView style={{ maxHeight: 120 }}>
+                    {request.attachments.map((attachment: any, index: number) => (
+                      <TouchableOpacity
+                        key={attachment.id || index}
+                        style={styles.attachmentItem}
+                        onPress={() => {
+                          Linking.openURL(attachment.url).catch(err => {
+                            console.error('Failed to open attachment:', err);
+                          });
+                        }}
+                      >
+                        <Icon name="file-pdf-box" size={16} color="#3b82f6" />
+                        <Text style={styles.attachmentText}>
+                          {attachment.filename}
+                        </Text>
+                        <Text style={styles.attachmentSize}>
+                          ({(attachment.size / (1024 * 1024)).toFixed(1)} MB)
+                        </Text>
+                        <Icon name="external-link" size={14} color="#a1a1aa" />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
               )}
 
@@ -1414,22 +1304,35 @@ export default function Chat() {
               <View style={styles.infoSection}>
                 <Text style={styles.infoLabel}>You will pay</Text>
                 <Text style={styles.payAmountText}>
-                  ≈ {paymentRequest?.amount || "..."} {paymentRequest?.token || "USDC"}
+                  ≈ {request?.amount || "..."} {request?.token || "USDC"}
                 </Text>
               </View>
             </View>
 
-            {/* Footer Buttons */}
+            {/* Updated Footer Buttons - Accept/Deny instead of Pay Now */}
             <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={styles.confirmButton}
-                onPress={handleConfirmPayment}
+                onPress={handleAcceptPayment}
+                disabled={loadingPaymentRequest}
               >
-                <Text style={styles.confirmButtonText}>Confirm</Text>
+                {loadingPaymentRequest ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.confirmButtonText}>Accept & Pay</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.denyButton}
+                onPress={handleDenyPayment}
+                disabled={loadingPaymentRequest}
+              >
+                <Text style={styles.denyButtonText}>Deny</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={handleCancelPayment}
+                disabled={loadingPaymentRequest}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -1439,6 +1342,18 @@ export default function Chat() {
       </Portal>
     );
   };
+
+  // Add loading overlay for payment request fetching
+  const PaymentLoadingOverlay = () => (
+    loadingPaymentRequest ? (
+      <View style={styles.spinnerOverlay}>
+        <ActivityIndicator size="large" color="#fff" />
+        <RNText style={{ color: "#fff", paddingTop: 10 }}>
+          Loading payment request...
+        </RNText>
+      </View>
+    ) : null
+  );
 
   // Biometric authentication screen
   const BiometricAuthScreen = () => (
@@ -1628,6 +1543,7 @@ export default function Chat() {
     return (
       <PaperProvider>
         <PaymentConfirmationModal />
+        <PaymentLoadingOverlay />
         <KeyboardAvoidingView
           style={[styles.container, { paddingBottom: keyboardOffset }]}
           behavior={"height"}
@@ -1705,3 +1621,224 @@ export default function Chat() {
   // fallback
   return null;
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: DARK_BG },
+  card: { marginVertical: 10, marginHorizontal: 16 },
+  inputContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderColor: "#27272a",
+    backgroundColor: DARK_BG,
+  },
+  loginButton: {
+    backgroundColor: "#6d28d9",
+    width: 220,
+    height: 64,
+    borderRadius: 16,
+    justifyContent: "center",
+    marginTop: 24,
+  },
+  loginLabel: {
+    color: "#fff",
+    fontSize: 22,
+    padding: 8,
+    fontWeight: "bold",
+    letterSpacing: 1,
+  },
+  loginContent: {
+    height: 64,
+  },
+  textInput: {
+    flex: 1,
+    marginRight: 8,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    backgroundColor: "#27272a",
+    color: "#fff",
+    height: 54,
+    fontSize: 18,
+  },
+  sendButton: {
+    borderRadius: 24,
+    width: 54,
+    height: 54,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: BLUE_400,
+  },
+  sendButtonDisabled: {
+    backgroundColor: "#52525b",
+  },
+  error: { color: "#f87171", alignSelf: "center", fontSize: 14, margin: 10 },
+  spinnerOverlay: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: DARK_OVERLAY,
+    zIndex: 100,
+  },
+  flatListContent: {
+    flexGrow: 1,
+    justifyContent: "flex-end",
+    paddingBottom: 8,
+  },
+  youCard: {
+    backgroundColor: BLUE_400,
+    borderRadius: 12,
+  },
+  agentCard: {
+    backgroundColor: PURPLE_800,
+    borderRadius: 12,
+  },
+  youText: {
+    color: "#fff",
+    fontSize: 16,
+  },
+  agentText: {
+    color: "#fff",
+    fontSize: 16,
+  },
+  modalContainer: {
+    margin: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: "#1f2937", // gray-800
+    borderRadius: 12,
+    padding: 24,
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: "#374151", // gray-700
+  },
+  modalHeader: {
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+  },
+  modalBody: {
+    marginBottom: 24,
+  },
+  infoSection: {
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  infoLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#d1d5db', // gray-300
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  amountContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+  },
+  amountValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  tokenText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  currencyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginTop: 4,
+  },
+  addressText: {
+    fontFamily: 'monospace',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+    textAlign: 'center',
+    flexWrap: 'wrap',
+  },
+  memoText: {
+    fontSize: 14,
+    color: '#d1d5db',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  payAmountText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+    textAlign: 'center',
+  },
+  modalFooter: {
+    flexDirection: 'column',
+    gap: 12,
+  },
+  confirmButton: {
+    flex: 1,
+    backgroundColor: '#3b82f6', // blue-500
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#374151', // gray-700
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  attachmentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#374151',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    gap: 8,
+  },
+  attachmentText: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 14,
+  },
+  attachmentSize: {
+    color: '#a1a1aa',
+    fontSize: 12,
+  },
+  denyButton: {
+    flex: 1,
+    backgroundColor: '#ef4444', // red-500
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  denyButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});

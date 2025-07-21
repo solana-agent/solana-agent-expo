@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+// Add preferred currency to the store interface and implementation:
+
 interface IChatData {
   username: string | null;
   displayName: string | null;
@@ -10,6 +12,7 @@ interface IChatData {
   chatConnected: boolean;
   chatConnectAttempted: boolean;
   checkingUsername: boolean;
+  preferredCurrency: string; // Add this field
 }
 
 interface IAppStore extends IChatData {
@@ -28,6 +31,7 @@ interface IAppStore extends IChatData {
   setChatConnected: (connected: boolean) => void;
   setChatConnectAttempted: (attempted: boolean) => void;
   setCheckingUsername: (checking: boolean) => void;
+  setPreferredCurrency: (currency: string) => void; // Add this action
   setChatData: (data: Partial<IChatData>) => void;
   clearChatData: () => void;
 }
@@ -51,6 +55,7 @@ export const useAppStore = create<IAppStore>()(
       chatConnected: false,
       chatConnectAttempted: false,
       checkingUsername: false,
+      preferredCurrency: 'USD', // Add default value
 
       // Chat actions
       setUsername: (username) => set({ username }),
@@ -60,11 +65,12 @@ export const useAppStore = create<IAppStore>()(
       setChatConnected: (chatConnected) => set({ chatConnected }),
       setChatConnectAttempted: (chatConnectAttempted) => set({ chatConnectAttempted }),
       setCheckingUsername: (checkingUsername) => set({ checkingUsername }),
+      setPreferredCurrency: (preferredCurrency) => set({ preferredCurrency }), // Add implementation
 
       // Batch update chat data
       setChatData: (data) => set((state) => ({ ...state, ...data })),
 
-      // Clear all chat data
+      // Clear all chat data (but keep preferred currency)
       clearChatData: () => set({
         username: null,
         displayName: null,
@@ -73,18 +79,19 @@ export const useAppStore = create<IAppStore>()(
         chatConnected: false,
         chatConnectAttempted: false,
         checkingUsername: false,
+        // Keep preferredCurrency when clearing
       }),
     }),
     {
       name: 'solana-agent-store',
       storage: createJSONStorage(() => AsyncStorage),
-      // Only persist certain fields
+      // Persist preferred currency
       partialize: (state) => ({
         username: state.username,
         displayName: state.displayName,
         chatToken: state.chatToken,
         avatarUrl: state.avatarUrl,
-        // Don't persist connection states - they should reset on app restart
+        preferredCurrency: state.preferredCurrency, // Add to persistence
       }),
     }
   )

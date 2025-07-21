@@ -48,13 +48,37 @@ interface MonthlyMetrics {
     currency: string; // Primary currency for display
 }
 
-// Add this state with your other state declarations
-const [monthlyMetrics, setMonthlyMetrics] = useState<MonthlyMetrics>({
-    revenue: 0,
-    expenses: 0,
-    cashFlow: 0,
-    currency: 'USD'
-});
+function getCurrencySymbol(fiat: string | undefined | null): string {
+    if (!fiat) return '';
+    if (!ALLOWED_FIAT.includes(fiat)) return '';
+    switch (fiat) {
+        case 'AUD': return '$';
+        case 'BRL': return '$';
+        case 'CAD': return '$';
+        case 'CHF': return 'CHF';
+        case 'CLP': return '$';
+        case 'CNH': return '¥';
+        case 'COP': return '$';
+        case 'EUR': return '€';
+        case 'GBP': return '£';
+        case 'IDR': return 'Rp';
+        case 'INR': return '₹';
+        case 'JPY': return '¥';
+        case 'KRW': return '₩';
+        case 'MXN': return '$';
+        case 'NOK': return 'kr';
+        case 'NZD': return '$';
+        case 'PEN': return 'S/';
+        case 'PHP': return '₱';
+        case 'SEK': return 'kr';
+        case 'SGD': return '$';
+        case 'TRY': return '₺';
+        case 'TWD': return '$';
+        case 'USD': return '$';
+        case 'ZAR': return 'R';
+        default: return '';
+    }
+}
 
 // Add this function to calculate metrics from payment requests
 const calculateMonthlyMetrics = (requests: PaymentRequest[]): MonthlyMetrics => {
@@ -169,7 +193,7 @@ function getStatusIcon(status: string): string {
 
 export default function PaymentLinksScreen() {
     const router = useRouter();
-    const { username } = useAppStore();
+    const { username, preferredCurrency } = useAppStore();
     const { getAccessToken } = usePrivy();
 
     // Tab state
@@ -196,6 +220,13 @@ export default function PaymentLinksScreen() {
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [showUserSearch, setShowUserSearch] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [monthlyMetrics, setMonthlyMetrics] = useState<MonthlyMetrics>({
+        revenue: 0,
+        expenses: 0,
+        cashFlow: 0,
+        currency: preferredCurrency || 'USD' // Use preferred currency
+    });
+
 
     // Load payment requests when switching to Created tab
     useEffect(() => {
@@ -215,13 +246,15 @@ export default function PaymentLinksScreen() {
     }, [currency]);
 
     // Update the loadPaymentRequests function to calculate metrics
+    // Update the loadPaymentRequests function to use preferred currency in API call
     const loadPaymentRequests = async () => {
         try {
             setLoadingRequests(true);
             const accessToken = await getAccessToken();
             if (!accessToken) return;
 
-            const response = await fetch(`${API_URL}/payment/requests`, {
+            // Add currency parameter to the API request
+            const response = await fetch(`${API_URL}/payment/requests?currency=${preferredCurrency}`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${accessToken}`,
@@ -234,9 +267,22 @@ export default function PaymentLinksScreen() {
                 const requests = data.requests || [];
                 setPaymentRequests(requests);
 
-                // Calculate and set monthly metrics
-                const metrics = calculateMonthlyMetrics(requests);
-                setMonthlyMetrics(metrics);
+                // The API should now return metrics already converted to preferred currency
+                if (data.metrics) {
+                    setMonthlyMetrics({
+                        revenue: data.metrics.revenue,
+                        expenses: data.metrics.expenses,
+                        cashFlow: data.metrics.cashFlow,
+                        currency: preferredCurrency
+                    });
+                } else {
+                    // Fallback: calculate metrics locally (but amounts won't be converted)
+                    const metrics = calculateMonthlyMetrics(requests);
+                    setMonthlyMetrics({
+                        ...metrics,
+                        currency: preferredCurrency
+                    });
+                }
             }
         } catch (error) {
             console.error('Error loading payment requests:', error);
@@ -258,7 +304,7 @@ export default function PaymentLinksScreen() {
                 <Text style={styles.metricTitle}>{title}</Text>
             </View>
             <Text style={[styles.metricAmount, { color }]}>
-                ${Math.abs(amount).toLocaleString('en-US', {
+                {getCurrencySymbol(currency)}{Math.abs(amount).toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
                 })}

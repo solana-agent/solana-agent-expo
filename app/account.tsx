@@ -3,8 +3,8 @@ import * as Clipboard from 'expo-clipboard';
 import Constants from "expo-constants";
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from "react";
-import { Alert, Image, StyleSheet, TouchableOpacity, View } from "react-native";
-import { ActivityIndicator, Button, IconButton, Text } from "react-native-paper";
+import { Alert, Image, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Button, IconButton, Text, Menu } from "react-native-paper";
 import { PushNotificationService } from '../components/PushNotificationService';
 import { useAppStore } from './store/Store';
 import { disconnectChatUser } from "../config/chatConfig";
@@ -12,20 +12,68 @@ import { disconnectChatUser } from "../config/chatConfig";
 const DARK_NAV = "#18181b";
 const API_URL = Constants.expoConfig?.extra?.apiUrl;
 
+// Add the ALLOWED_FIAT constant
+const ALLOWED_FIAT = [
+  'AUD', 'BRL', 'CAD', 'CHF', 'CLP', 'CNH', 'COP', 'EUR', 'GBP', 'IDR',
+  'INR', 'JPY', 'KRW', 'MXN', 'NOK', 'NZD', 'PEN', 'PHP', 'SEK', 'SGD',
+  'TRY', 'TWD', 'USD', 'ZAR',
+];
+
+function currencyName(fiat: string): string {
+  switch (fiat) {
+    case 'AUD': return 'Australian Dollars';
+    case 'BRL': return 'Brazilian Reais';
+    case 'CAD': return 'Canadian Dollars';
+    case 'CHF': return 'Swiss Francs';
+    case 'CLP': return 'Chilean Pesos';
+    case 'CNH': return 'Chinese Yuan';
+    case 'COP': return 'Colombian Pesos';
+    case 'EUR': return 'Euros';
+    case 'GBP': return 'British Pounds';
+    case 'IDR': return 'Indonesian Rupiah';
+    case 'INR': return 'Indian Rupees';
+    case 'JPY': return 'Japanese Yen';
+    case 'KRW': return 'South Korean Won';
+    case 'MXN': return 'Mexican Pesos';
+    case 'NOK': return 'Norwegian Kroner';
+    case 'NZD': return 'New Zealand Dollars';
+    case 'PEN': return 'Peruvian Soles';
+    case 'PHP': return 'Philippine Pesos';
+    case 'SEK': return 'Swedish Kronor';
+    case 'SGD': return 'Singapore Dollars';
+    case 'TRY': return 'Turkish Lira';
+    case 'TWD': return 'New Taiwan Dollars';
+    case 'USD': return 'United States Dollars';
+    case 'ZAR': return 'South African Rand';
+    default: return 'USD';
+  }
+}
+
 export default function AccountScreen() {
   const { isReady, user, logout, getAccessToken } = usePrivy();
   const wallet = useEmbeddedSolanaWallet();
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [currencyMenuVisible, setCurrencyMenuVisible] = useState(false);
 
   const walletAddress =
     wallet?.wallets && wallet.wallets.length > 0 && wallet.wallets[0]?.address
       ? wallet.wallets[0]?.address
       : null;
 
-  const { username, setUsername, avatarUrl, setAvatarUrl, clearChatData } = useAppStore();
+  const {
+    username,
+    setUsername,
+    avatarUrl,
+    setAvatarUrl,
+    displayName,
+    setDisplayName,
+    preferredCurrency,
+    setPreferredCurrency,
+    clearChatData
+  } = useAppStore();
 
-  // Load username and avatar on component mount
+  // Load username, display name and avatar on component mount
   useEffect(() => {
     const loadUserData = async () => {
       try {
@@ -33,7 +81,7 @@ export default function AccountScreen() {
         if (username) {
           setUsername(username);
 
-          // Load user avatar from server
+          // Load user data from server
           const accessToken = await getAccessToken();
           if (accessToken) {
             const response = await fetch(`${API_URL}/chat/user-info`, {
@@ -49,6 +97,9 @@ export default function AccountScreen() {
               if (userData.avatarUrl) {
                 setAvatarUrl(userData.avatarUrl);
               }
+              if (userData.displayName) {
+                setDisplayName(userData.displayName);
+              }
             }
           }
         }
@@ -60,7 +111,8 @@ export default function AccountScreen() {
     if (user) {
       loadUserData();
     }
-  }, [user, getAccessToken, username, setUsername, setAvatarUrl]);
+  }, [user, getAccessToken, username, setUsername, setDisplayName, setAvatarUrl]);
+
 
   useEffect(() => {
     const registerPushNotifications = async () => {
@@ -265,6 +317,25 @@ export default function AccountScreen() {
             )}
           </View>
 
+          {/* Display Name Section */}
+          {displayName && (
+            <View style={styles.sectionContainer}>
+              <Text style={styles.displayNameLabel}>Name</Text>
+              <View style={styles.displayNameContainer}>
+                <View style={styles.displayNameBox}>
+                  <Text style={styles.displayNameText}>{displayName}</Text>
+                </View>
+                <IconButton
+                  icon="content-copy"
+                  iconColor="#a3a3a3"
+                  size={24}
+                  onPress={() => copyToClipboard(displayName, "Name")}
+                  style={styles.copyButton}
+                />
+              </View>
+            </View>
+          )}
+
           {/* Username Section */}
           {username && (
             <View style={styles.sectionContainer}>
@@ -298,6 +369,48 @@ export default function AccountScreen() {
                 onPress={() => copyToClipboard(walletAddress, "Wallet address")}
                 style={styles.copyButton}
               />
+            </View>
+          </View>
+
+          {/* Preferred Currency Section */}
+          <View style={styles.sectionContainer}>
+            <Text style={styles.addressLabel}>Preferred Currency</Text>
+            <View style={styles.addressContainer}>
+              <Menu
+                visible={currencyMenuVisible}
+                onDismiss={() => setCurrencyMenuVisible(false)}
+                contentStyle={styles.menuContent}
+                anchor={
+                  <TouchableOpacity
+                    style={styles.currencyDropdown}
+                    onPress={() => setCurrencyMenuVisible(true)}
+                  >
+                    <Text style={styles.currencyText}>
+                      {currencyName(preferredCurrency)}
+                    </Text>
+                    <IconButton
+                      icon="chevron-down"
+                      iconColor="#a3a3a3"
+                      size={20}
+                      style={{ margin: 0 }}
+                    />
+                  </TouchableOpacity>
+                }
+              >
+                <ScrollView style={{ maxHeight: 200 }}>
+                  {ALLOWED_FIAT.map((fiat) => (
+                    <Menu.Item
+                      key={fiat}
+                      onPress={() => {
+                        setPreferredCurrency(fiat);
+                        setCurrencyMenuVisible(false);
+                      }}
+                      title={currencyName(fiat)}
+                      titleStyle={styles.menuItemText}
+                    />
+                  ))}
+                </ScrollView>
+              </Menu>
             </View>
           </View>
 
@@ -465,5 +578,56 @@ const styles = StyleSheet.create({
   sectionContainer: {
     alignItems: "flex-start",
     marginBottom: 24,
+  },
+  currencyDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: "#27272a",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    maxWidth: 300,
+    flex: 1,
+  },
+  currencyText: {
+    color: "#fff",
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  menuContent: {
+    backgroundColor: "#27272a",
+    borderRadius: 8,
+  },
+  menuItemText: {
+    color: "#fff",
+  },
+  displayNameContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  displayNameBox: {
+    backgroundColor: "#27272a",
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    alignItems: "center",
+    flex: 1,
+    maxWidth: 300,
+  },
+  displayNameLabel: {
+    color: "#a3a3a3",
+    fontSize: 16,
+    marginBottom: 6,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    textAlign: "center",
+  },
+  displayNameText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
 });
