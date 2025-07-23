@@ -505,6 +505,15 @@ export default function PaymentLinksScreen() {
             const markdownLink = `[Pay now](agent://pay?id=${result.id})`;
             setGeneratedLink(markdownLink);
 
+            // Clear all form fields except the generated link
+            setSelectedUser(null);
+            setCurrency('USD');
+            setAmount('');
+            setToken('USDC');
+            setDueDate(new Date());
+            setExternalId('');
+            setAttachedFiles([]);
+
             // Collapse the form and scroll to the link
             setFormExpanded(false);
             setTimeout(() => {
@@ -648,7 +657,12 @@ export default function PaymentLinksScreen() {
 
             {/* Tab Content */}
             {selectedTab === 'create' ? (
-                <ScrollView ref={scrollViewRef} style={styles.content} showsVerticalScrollIndicator={false}>
+                <ScrollView
+                    ref={scrollViewRef}
+                    style={styles.content}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.contentContainerWithTabBar}
+                >
                     {showUserSearch ? (
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>Select Payee</Text>
@@ -1319,5 +1333,8 @@ const styles = StyleSheet.create({
     },
     metricsAccordionContent: {
         padding: 16,
+    },
+    contentContainerWithTabBar: {
+        paddingBottom: 48, // or whatever your tab bar height is
     },
 });
