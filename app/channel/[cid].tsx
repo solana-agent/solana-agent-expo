@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Channel, MessageList, MessageInput, useChatContext } from 'stream-chat-expo';
+import {
+    Channel,
+    MessageList,
+    MessageInput,
+    useChatContext,
+} from 'stream-chat-expo';
 import { Appbar, Menu } from 'react-native-paper';
+import { useAppStore } from '../store/Store';
 
 const DARK_BG = "#18181b";
 
@@ -10,6 +16,7 @@ export default function ChannelScreen() {
     const { client } = useChatContext();
     const { cid } = useLocalSearchParams();
     const router = useRouter();
+    const { username } = useAppStore();
     const [channel, setChannel] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -18,126 +25,88 @@ export default function ChannelScreen() {
     const [isBlocked, setIsBlocked] = useState(false);
 
     useEffect(() => {
-
-        const checkBlockStatus = async (userId: string) => {
-            try {
-                if (!userId || !client) return;
-
-                const blockedUsers = await client.getBlockedUsers();
-                const blocked = blockedUsers.blocks?.some((block: any) => block.blocked_user_id === userId);
-                setIsBlocked(blocked || false);
-            } catch (err) {
-                console.error('Error checking block status:', err);
-            }
-        };
-
         const loadChannel = async () => {
             try {
-                if (!cid || !client) {
-                    setError('No channel ID or client available');
+                if (!client || !cid) {
+                    setError('No chat client or channel ID');
                     setLoading(false);
                     return;
                 }
 
-                const channelId = cid as string;
-                const cleanChannelId = channelId.includes(':') ? channelId.split(':')[1] : channelId;
+                console.log('Loading channel with CID:', cid);
 
-                console.log('Loading channel from ID:', channelId);
-
-                const channelInstance = client.channel('messaging', cleanChannelId);
+                // Get the channel
+                const channelInstance = client.channel('messaging', cid as string);
                 await channelInstance.watch();
 
                 setChannel(channelInstance);
 
-                // Get the other user info
+                // Get other user info (assuming it's a 1:1 chat)
                 const members = Object.values(channelInstance.state.members || {});
-                const otherMember = members.find((member: any) => member.user?.id !== client?.userID);
-                setOtherUser(otherMember?.user);
+                const currentUser = client.userID;
+                const otherMember = members.find((member: any) => member.user?.id !== currentUser);
 
-                // Check if user is blocked
-                await checkBlockStatus(otherMember?.user?.id as string);
+                if (otherMember?.user) {
+                    setOtherUser(otherMember.user);
 
-                setError('');
+                    // Check if user is blocked
+                    const currentUserData = await client.queryUsers({ id: currentUser });
+                    if (currentUserData.users && currentUserData.users[0]) {
+                        const blockedUsers = currentUserData.users[0].blocked_user_ids || [];
+                        setIsBlocked(blockedUsers.includes(otherMember.user.id));
+                    }
+                }
+
+                setLoading(false);
             } catch (err) {
                 console.error('Error loading channel:', err);
                 setError('Failed to load channel');
-            } finally {
                 setLoading(false);
             }
         };
 
         loadChannel();
-    }, [cid, client]);
+    }, [client, cid]);
 
     const handleBlockUser = async () => {
-        if (!otherUser?.id) return;
+        if (!otherUser || !client) return;
 
         try {
-            Alert.alert(
-                'Block User',
-                `Are you sure you want to block ${otherUser.name || otherUser.id}? You will no longer receive messages from this user in 1-on-1 chats.`,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Block',
-                        style: 'destructive',
-                        onPress: async () => {
-                            try {
-                                await client.blockUser(otherUser.id);
-                                setIsBlocked(true);
-                                setMenuVisible(false);
-
-                                // Navigate back to chat list since channel will be hidden
-                                router.push('/chat');
-
-                                Alert.alert('User Blocked', `${otherUser.name || otherUser.id} has been blocked.`);
-                            } catch (err) {
-                                console.error('Error blocking user:', err);
-                                Alert.alert('Error', 'Failed to block user. Please try again.');
-                            }
-                        }
-                    }
-                ]
-            );
-        } catch (err) {
-            console.error('Error in block user flow:', err);
+            if (isBlocked) {
+                // Unblock user
+                await client.unBlockUser(otherUser.id);
+                setIsBlocked(false);
+                Alert.alert('Success', `${otherUser.name || otherUser.id} has been unblocked`);
+            } else {
+                // Block user
+                await client.blockUser(otherUser.id);
+                setIsBlocked(true);
+                Alert.alert('Success', `${otherUser.name || otherUser.id} has been blocked`);
+            }
+        } catch (error) {
+            console.error('Error blocking/unblocking user:', error);
+            Alert.alert('Error', 'Failed to update block status');
         }
+        setMenuVisible(false);
     };
 
-    const handleUnblockUser = async () => {
-        if (!otherUser?.id) return;
+    const showBlockConfirmation = () => {
+        const action = isBlocked ? 'unblock' : 'block';
+        const userName = otherUser?.name || otherUser?.id || 'this user';
 
-        try {
-            Alert.alert(
-                'Unblock User',
-                `Are you sure you want to unblock ${otherUser.name || otherUser.id}? You will start receiving messages from this user again.`,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Unblock',
-                        onPress: async () => {
-                            try {
-                                await client.unBlockUser(otherUser.id);
-                                setIsBlocked(false);
-                                setMenuVisible(false);
-
-                                Alert.alert('User Unblocked', `${otherUser.name || otherUser.id} has been unblocked.`);
-                            } catch (err) {
-                                console.error('Error unblocking user:', err);
-                                Alert.alert('Error', 'Failed to unblock user. Please try again.');
-                            }
-                        }
-                    }
-                ]
-            );
-        } catch (err) {
-            console.error('Error in unblock user flow:', err);
-        }
-    };
-
-    const getChannelTitle = () => {
-        if (!channel) return 'Chat';
-        return otherUser?.name || otherUser?.id || 'Chat';
+        Alert.alert(
+            `${action.charAt(0).toUpperCase() + action.slice(1)} User`,
+            `Are you sure you want to ${action} ${userName}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: action.charAt(0).toUpperCase() + action.slice(1),
+                    onPress: handleBlockUser,
+                    style: isBlocked ? 'default' : 'destructive'
+                }
+            ]
+        );
+        setMenuVisible(false);
     };
 
     if (loading) {
@@ -151,7 +120,7 @@ export default function ChannelScreen() {
                     <Appbar.Content title="Loading..." titleStyle={styles.headerTitle} />
                 </Appbar.Header>
                 <View style={styles.centerContent}>
-                    <Text style={styles.loadingText}>Loading channel...</Text>
+                    <Text style={{ color: "#fff" }}>Loading channel...</Text>
                 </View>
             </View>
         );
@@ -182,13 +151,12 @@ export default function ChannelScreen() {
                     onPress={() => router.push('/chat')}
                 />
                 <Appbar.Content
-                    title={getChannelTitle()}
+                    title={otherUser?.name || otherUser?.id || 'Chat'}
                     titleStyle={styles.headerTitle}
                 />
                 <Menu
                     visible={menuVisible}
                     onDismiss={() => setMenuVisible(false)}
-                    contentStyle={styles.menuContent}
                     anchor={
                         <Appbar.Action
                             icon="dots-vertical"
@@ -196,27 +164,21 @@ export default function ChannelScreen() {
                             onPress={() => setMenuVisible(true)}
                         />
                     }
+                    contentStyle={styles.menuContent}
                 >
-                    {isBlocked ? (
-                        <Menu.Item
-                            onPress={handleUnblockUser}
-                            title="Unblock User"
-                            titleStyle={styles.menuItemText}
-                            leadingIcon="account-check"
-                        />
-                    ) : (
-                        <Menu.Item
-                            onPress={handleBlockUser}
-                            title="Block User"
-                            titleStyle={[styles.menuItemText, styles.destructiveText]}
-                            leadingIcon="account-cancel"
-                        />
-                    )}
+                    <Menu.Item
+                        onPress={showBlockConfirmation}
+                        title={isBlocked ? 'Unblock User' : 'Block User'}
+                        titleStyle={styles.menuItemText}
+                        leadingIcon={isBlocked ? 'account-check' : 'account-cancel'}
+                    />
                 </Menu>
             </Appbar.Header>
-
-            <View style={styles.chatContainer}>
-                <Channel channel={channel}>
+            {/* Make Channel fill the rest of the space */}
+            <View style={{ flex: 1 }}>
+                <Channel
+                    channel={channel}
+                >
                     <MessageList />
                     <MessageInput />
                 </Channel>
@@ -235,15 +197,12 @@ const styles = StyleSheet.create({
         elevation: 0,
         shadowOpacity: 0,
         borderBottomWidth: 1,
-        borderBottomColor: '#27272a',
+        borderBottomColor: "#3f3f46",
     },
     headerTitle: {
         color: '#fff',
         fontSize: 18,
         fontWeight: '600',
-    },
-    chatContainer: {
-        flex: 1,
     },
     centerContent: {
         flex: 1,
@@ -251,25 +210,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 20,
     },
-    loadingText: {
-        color: '#ffffff',
-        fontSize: 16,
-        fontWeight: '500',
-    },
     errorText: {
         color: '#f87171',
         fontSize: 16,
-        fontWeight: '500',
         textAlign: 'center',
     },
     menuContent: {
-        backgroundColor: '#27272a',
+        backgroundColor: "#27272a",
         borderRadius: 8,
     },
     menuItemText: {
-        color: '#ffffff',
-    },
-    destructiveText: {
-        color: '#ef4444',
+        color: "#fff",
     },
 });

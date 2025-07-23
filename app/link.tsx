@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Alert, TouchableOpacity, ScrollView, FlatList } from 'react-native';
-import { Text, Appbar, TextInput, Button, Menu, ActivityIndicator, SegmentedButtons, Card } from 'react-native-paper';
+import { Text, Appbar, TextInput, Button, Menu, ActivityIndicator, SegmentedButtons, Card, IconButton, List } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { UserSearch } from '../components/UserSearch';
 import { useAppStore } from './store/Store';
 import Constants from 'expo-constants';
 import { usePrivy } from '@privy-io/expo';
@@ -191,6 +190,84 @@ function getStatusIcon(status: string): string {
     }
 }
 
+function PayeeSearch({ onSelect, onClose }: { onSelect: (user: any) => void, onClose: () => void }) {
+    const [query, setQuery] = useState('');
+    const [results, setResults] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    const { getAccessToken } = usePrivy();
+
+    const searchUsers = async (text: string) => {
+        setLoading(true);
+        setQuery(text);
+        try {
+            const accessToken = await getAccessToken();
+            if (!accessToken) return;
+            const response = await fetch(`${API_URL}/users/search?q=${encodeURIComponent(text)}`, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setResults(data.users || []);
+            }
+        } catch (error) {
+            setResults([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (query.length > 0) {
+            searchUsers(query);
+        } else {
+            setResults([]);
+        }
+    }, [query]);
+
+    return (
+        <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <TextInput
+                    style={[styles.textInput, { flex: 1 }]}
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Search by username or display name"
+                    autoFocus
+                />
+                <IconButton icon="close" onPress={onClose} />
+            </View>
+            {loading ? (
+                <ActivityIndicator color="#3b82f6" />
+            ) : (
+                <FlatList
+                    data={results}
+                    keyExtractor={item => item.id}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity
+                            style={styles.selectedUser}
+                            onPress={() => onSelect(item)}
+                        >
+                            <Text style={styles.selectedUserText}>
+                                {item.name || item.username}
+                            </Text>
+                            <Icon name="check" size={20} color="#10b981" />
+                        </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                        <Text style={{ color: '#a1a1aa', textAlign: 'center', marginTop: 16 }}>
+                            {query ? 'No users found.' : 'Type to search for users.'}
+                        </Text>
+                    }
+                />
+            )}
+        </View>
+    );
+}
+
+
 export default function PaymentLinksScreen() {
     const router = useRouter();
     const { username, preferredCurrency } = useAppStore();
@@ -226,6 +303,8 @@ export default function PaymentLinksScreen() {
         cashFlow: 0,
         currency: preferredCurrency || 'USD' // Use preferred currency
     });
+    const [formExpanded, setFormExpanded] = useState(true);
+    const scrollViewRef = useRef<ScrollView>(null);
 
 
     // Load payment requests when switching to Created tab
@@ -343,7 +422,7 @@ export default function PaymentLinksScreen() {
     const handleFileUpload = async () => {
         try {
             const result = await DocumentPicker.getDocumentAsync({
-                type: 'application/pdf', // Only allow PDF files
+                type: 'application/pdf',
                 copyToCacheDirectory: true,
             });
 
@@ -356,6 +435,7 @@ export default function PaymentLinksScreen() {
                     return;
                 }
 
+                // On Android, file.size is always available
                 setAttachedFiles([...attachedFiles, file]);
             }
         } catch (error) {
@@ -377,18 +457,14 @@ export default function PaymentLinksScreen() {
         setLoading(true);
 
         try {
-            // Get access token for API authentication
             const accessToken = await getAccessToken();
             if (!accessToken) {
                 throw new Error('No access token available');
             }
 
             let response;
-
-            // Use FormData for file uploads
             const formData = new FormData();
 
-            // Add payment data fields
             formData.append('payee', selectedUser.id);
             formData.append('payer', username);
             formData.append('amount', amount);
@@ -402,7 +478,6 @@ export default function PaymentLinksScreen() {
 
             formData.append('memo', `Payment request from ${username} to ${selectedUser.name || selectedUser.id}`);
 
-            // Add files
             attachedFiles.forEach((file, index) => {
                 formData.append(`attachments`, {
                     uri: file.uri,
@@ -411,18 +486,6 @@ export default function PaymentLinksScreen() {
                 } as any);
             });
 
-            console.log('Creating payment request with files:', {
-                payee: selectedUser.id,
-                payer: username,
-                amount: amount,
-                currency: currency,
-                token: token,
-                dueDate: Math.floor(dueDate.getTime() / 1000),
-                externalId: externalId || null,
-                filesCount: attachedFiles.length
-            });
-
-            // Send multipart request
             response = await fetch(`${API_URL}/payment/create-request`, {
                 method: 'POST',
                 headers: {
@@ -439,13 +502,17 @@ export default function PaymentLinksScreen() {
 
             const result = await response.json();
 
-            // The API should return something like: { id: 'unique-payment-id', link: 'https://sol-pay.co/pay/unique-payment-id' }
-            const link = `https://sol-pay.co/pay/${result.id}`;
-            setGeneratedLink(link);
+            const markdownLink = `[Pay now](agent://pay?id=${result.id})`;
+            setGeneratedLink(markdownLink);
+
+            // Collapse the form and scroll to the link
+            setFormExpanded(false);
+            setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+            }, 350);
 
             Alert.alert('Success', 'Payment request created successfully!');
 
-            // Refresh the created list if we're on that tab
             if (selectedTab === 'created') {
                 loadPaymentRequests();
             }
@@ -458,6 +525,7 @@ export default function PaymentLinksScreen() {
         }
     };
 
+    // In your copyLink function:
     const copyLink = async () => {
         if (generatedLink) {
             await Clipboard.setStringAsync(generatedLink);
@@ -531,7 +599,7 @@ export default function PaymentLinksScreen() {
                     <Appbar.Content title="Payment Links" titleStyle={styles.headerTitle} />
                 </Appbar.Header>
                 <View style={styles.centerContent}>
-                    <Text style={styles.errorText}>Please set up your username first</Text>
+                    <Text style={styles.loginMessage}>Please login to create payment links</Text>
                 </View>
             </View>
         );
@@ -580,218 +648,229 @@ export default function PaymentLinksScreen() {
 
             {/* Tab Content */}
             {selectedTab === 'create' ? (
-                <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                <ScrollView ref={scrollViewRef} style={styles.content} showsVerticalScrollIndicator={false}>
                     {showUserSearch ? (
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>Select Payee</Text>
-                            <UserSearch onUserSelect={handleUserSelect} onClose={() => setShowUserSearch(false)} />
+                            <PayeeSearch onSelect={handleUserSelect} onClose={() => setShowUserSearch(false)} />
                         </View>
                     ) : (
                         <>
-                            {/* Payee Selection */}
-                            <View style={styles.section}>
-                                <Text style={styles.label}>To (Payee) *</Text>
-                                {selectedUser ? (
-                                    <TouchableOpacity
-                                        style={styles.selectedUser}
-                                        onPress={() => setShowUserSearch(true)}
-                                    >
-                                        <Text style={styles.selectedUserText}>
-                                            {selectedUser.name || selectedUser.id}
-                                        </Text>
-                                        <Icon name="pencil" size={20} color="#a1a1aa" />
-                                    </TouchableOpacity>
-                                ) : (
-                                    <TouchableOpacity
-                                        style={styles.selectButton}
-                                        onPress={() => setShowUserSearch(true)}
-                                    >
-                                        <Text style={styles.selectButtonText}>Select Payee</Text>
-                                        <Icon name="chevron-right" size={20} color="#a1a1aa" />
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-
-                            {/* Currency Selection */}
-                            <View style={styles.section}>
-                                <Text style={styles.label}>Currency *</Text>
-                                <Menu
-                                    visible={currencyMenuVisible}
-                                    onDismiss={() => setCurrencyMenuVisible(false)}
-                                    contentStyle={styles.menuContent}
-                                    anchor={
-                                        <TouchableOpacity
-                                            style={styles.dropdown}
-                                            onPress={() => setCurrencyMenuVisible(true)}
-                                        >
-                                            <Text style={styles.dropdownText}>
-                                                {currencyName(currency)}
-                                            </Text>
-                                            <Icon name="chevron-down" size={20} color="#a1a1aa" />
-                                        </TouchableOpacity>
-                                    }
-                                >
-                                    <ScrollView style={{ maxHeight: 200 }}>
-                                        {ALLOWED_FIAT.map((fiat) => (
-                                            <Menu.Item
-                                                key={fiat}
-                                                onPress={() => {
-                                                    setCurrency(fiat);
-                                                    setCurrencyMenuVisible(false);
-                                                }}
-                                                title={currencyName(fiat)}
-                                                titleStyle={styles.menuItemText}
-                                            />
-                                        ))}
-                                    </ScrollView>
-                                </Menu>
-                            </View>
-
-                            {/* Amount Input */}
-                            <View style={styles.section}>
-                                <Text style={styles.label}>Amount *</Text>
-                                <TextInput
-                                    style={styles.textInput}
-                                    value={amount}
-                                    onChangeText={handleAmountChange}
-                                    placeholder="0.00"
-                                    keyboardType="decimal-pad"
-                                    mode="outlined"
-                                    theme={{
-                                        colors: {
-                                            primary: '#3b82f6',
-                                            background: DARK_CARD,
-                                            surface: DARK_CARD,
-                                            outline: DARK_BORDER,
-                                            onSurface: '#ffffff',
-                                            placeholder: '#a1a1aa',
-                                        },
-                                    }}
-                                />
-                            </View>
-
-                            {/* Token Selection (only show if not USD/EUR) */}
-                            {currency !== 'USD' && currency !== 'EUR' && (
+                            <List.Accordion
+                                title="Create Payment Link"
+                                expanded={formExpanded}
+                                onPress={() => setFormExpanded(!formExpanded)}
+                                left={props => <List.Icon {...props} icon="form-select" color="#3b82f6" />}
+                                style={styles.metricsAccordion}
+                                theme={{ colors: { background: DARK_CARD } }}
+                            >
+                                {/* Payee Selection */}
                                 <View style={styles.section}>
-                                    <Text style={styles.label}>Token</Text>
+                                    <Text style={styles.label}>To (Payee) *</Text>
+                                    {selectedUser ? (
+                                        <TouchableOpacity
+                                            style={styles.selectedUser}
+                                            onPress={() => setShowUserSearch(true)}
+                                        >
+                                            <Text style={styles.selectedUserText}>
+                                                {selectedUser.name || selectedUser.id}
+                                            </Text>
+                                            <Icon name="pencil" size={20} color="#a1a1aa" />
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <TouchableOpacity
+                                            style={styles.selectButton}
+                                            onPress={() => setShowUserSearch(true)}
+                                        >
+                                            <Text style={styles.selectButtonText}>Select Payee</Text>
+                                            <Icon name="chevron-right" size={20} color="#a1a1aa" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+
+                                {/* Currency Selection */}
+                                <View style={styles.section}>
+                                    <Text style={styles.label}>Currency *</Text>
                                     <Menu
-                                        visible={tokenMenuVisible}
-                                        onDismiss={() => setTokenMenuVisible(false)}
+                                        visible={currencyMenuVisible}
+                                        onDismiss={() => setCurrencyMenuVisible(false)}
                                         contentStyle={styles.menuContent}
                                         anchor={
                                             <TouchableOpacity
                                                 style={styles.dropdown}
-                                                onPress={() => setTokenMenuVisible(true)}
+                                                onPress={() => setCurrencyMenuVisible(true)}
                                             >
-                                                <Text style={styles.dropdownText}>{token}</Text>
+                                                <Text style={styles.dropdownText}>
+                                                    {currencyName(currency)}
+                                                </Text>
                                                 <Icon name="chevron-down" size={20} color="#a1a1aa" />
                                             </TouchableOpacity>
                                         }
                                     >
-                                        <Menu.Item
-                                            onPress={() => {
-                                                setToken('USDC');
-                                                setTokenMenuVisible(false);
-                                            }}
-                                            title="USDC"
-                                            titleStyle={styles.menuItemText}
-                                        />
-                                        <Menu.Item
-                                            onPress={() => {
-                                                setToken('EURC');
-                                                setTokenMenuVisible(false);
-                                            }}
-                                            title="EURC"
-                                            titleStyle={styles.menuItemText}
-                                        />
+                                        <ScrollView style={{ maxHeight: 200 }}>
+                                            {ALLOWED_FIAT.map((fiat) => (
+                                                <Menu.Item
+                                                    key={fiat}
+                                                    onPress={() => {
+                                                        setCurrency(fiat);
+                                                        setCurrencyMenuVisible(false);
+                                                    }}
+                                                    title={currencyName(fiat)}
+                                                    titleStyle={styles.menuItemText}
+                                                />
+                                            ))}
+                                        </ScrollView>
                                     </Menu>
                                 </View>
-                            )}
 
-                            {/* Due Date */}
-                            <View style={styles.section}>
-                                <Text style={styles.label}>Due Date *</Text>
-                                <View style={styles.dateTimeContainer}>
-                                    <TouchableOpacity
-                                        style={[styles.dropdown, { flex: 1, marginRight: 8 }]}
-                                        onPress={() => setShowDatePicker(true)}
-                                    >
-                                        <Text style={styles.dropdownText}>
-                                            {dueDate.toLocaleDateString()}
-                                        </Text>
-                                        <Icon name="calendar" size={20} color="#a1a1aa" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.dropdown, { flex: 1 }]}
-                                        onPress={() => setShowTimePicker(true)}
-                                    >
-                                        <Text style={styles.dropdownText}>
-                                            {dueDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </Text>
-                                        <Icon name="clock" size={20} color="#a1a1aa" />
-                                    </TouchableOpacity>
+                                {/* Amount Input */}
+                                <View style={styles.section}>
+                                    <Text style={styles.label}>Amount *</Text>
+                                    <TextInput
+                                        style={styles.textInput}
+                                        value={amount}
+                                        onChangeText={handleAmountChange}
+                                        placeholder="0.00"
+                                        keyboardType="decimal-pad"
+                                        mode="outlined"
+                                        theme={{
+                                            colors: {
+                                                primary: '#3b82f6',
+                                                background: DARK_CARD,
+                                                surface: DARK_CARD,
+                                                outline: DARK_BORDER,
+                                                onSurface: '#ffffff',
+                                                placeholder: '#a1a1aa',
+                                            },
+                                        }}
+                                    />
                                 </View>
-                            </View>
 
-                            {/* External ID */}
-                            <View style={styles.section}>
-                                <Text style={styles.label}>External ID</Text>
-                                <TextInput
-                                    style={styles.textInput}
-                                    value={externalId}
-                                    onChangeText={setExternalId}
-                                    placeholder="Optional reference ID"
-                                    mode="outlined"
-                                    theme={{
-                                        colors: {
-                                            primary: '#3b82f6',
-                                            background: DARK_CARD,
-                                            surface: DARK_CARD,
-                                            outline: DARK_BORDER,
-                                            onSurface: '#ffffff',
-                                            placeholder: '#a1a1aa',
-                                        },
-                                    }}
-                                />
-                            </View>
+                                {/* Token Selection (only show if not USD/EUR) */}
+                                {currency !== 'USD' && currency !== 'EUR' && (
+                                    <View style={styles.section}>
+                                        <Text style={styles.label}>Token</Text>
+                                        <Menu
+                                            visible={tokenMenuVisible}
+                                            onDismiss={() => setTokenMenuVisible(false)}
+                                            contentStyle={styles.menuContent}
+                                            anchor={
+                                                <TouchableOpacity
+                                                    style={styles.dropdown}
+                                                    onPress={() => setTokenMenuVisible(true)}
+                                                >
+                                                    <Text style={styles.dropdownText}>{token}</Text>
+                                                    <Icon name="chevron-down" size={20} color="#a1a1aa" />
+                                                </TouchableOpacity>
+                                            }
+                                        >
+                                            <Menu.Item
+                                                onPress={() => {
+                                                    setToken('USDC');
+                                                    setTokenMenuVisible(false);
+                                                }}
+                                                title="USDC"
+                                                titleStyle={styles.menuItemText}
+                                            />
+                                            <Menu.Item
+                                                onPress={() => {
+                                                    setToken('EURC');
+                                                    setTokenMenuVisible(false);
+                                                }}
+                                                title="EURC"
+                                                titleStyle={styles.menuItemText}
+                                            />
+                                        </Menu>
+                                    </View>
+                                )}
 
-                            {/* File Attachments */}
-                            <View style={styles.section}>
-                                <Text style={styles.label}>Attachments</Text>
-                                <TouchableOpacity style={styles.uploadButton} onPress={handleFileUpload}>
-                                    <Icon name="file-pdf-box" size={20} color="#3b82f6" />
-                                    <Text style={styles.uploadButtonText}>Attach PDF (max 100MB)</Text>
-                                </TouchableOpacity>
-
-                                {attachedFiles.map((file, index) => (
-                                    <View key={index} style={styles.fileItem}>
-                                        <Icon name="file-pdf-box" size={16} color="#ef4444" />
-                                        <View style={styles.fileInfo}>
-                                            <Text style={styles.fileName}>{file.name}</Text>
-                                            <Text style={styles.fileSize}>
-                                                {file.size ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : 'Size unknown'}
+                                {/* Due Date */}
+                                <View style={styles.section}>
+                                    <Text style={styles.label}>Due Date *</Text>
+                                    <View style={styles.dateTimeContainer}>
+                                        <TouchableOpacity
+                                            style={[styles.dropdown, { flex: 1, marginRight: 8 }]}
+                                            onPress={() => setShowDatePicker(true)}
+                                        >
+                                            <Text style={styles.dropdownText}>
+                                                {dueDate.toLocaleDateString()}
                                             </Text>
-                                        </View>
-                                        <TouchableOpacity onPress={() => removeFile(index)}>
-                                            <Icon name="close" size={16} color="#ef4444" />
+                                            <Icon name="calendar" size={20} color="#a1a1aa" />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.dropdown, { flex: 1 }]}
+                                            onPress={() => setShowTimePicker(true)}
+                                        >
+                                            <Text style={styles.dropdownText}>
+                                                {dueDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </Text>
+                                            <Icon name="clock" size={20} color="#a1a1aa" />
                                         </TouchableOpacity>
                                     </View>
-                                ))}
-                            </View>
+                                </View>
 
-                            {/* Generate Link Button */}
-                            <View style={styles.section}>
-                                <Button
-                                    mode="contained"
-                                    onPress={generatePaymentLink}
-                                    loading={loading}
-                                    disabled={loading || !selectedUser || !amount || !currency}
-                                    style={styles.generateButton}
-                                    labelStyle={styles.generateButtonText}
-                                >
-                                    Generate Payment Link
-                                </Button>
-                            </View>
+                                {/* External ID */}
+                                <View style={styles.section}>
+                                    <Text style={styles.label}>External ID</Text>
+                                    <TextInput
+                                        style={styles.textInput}
+                                        value={externalId}
+                                        onChangeText={setExternalId}
+                                        placeholder="Optional reference ID"
+                                        mode="outlined"
+                                        theme={{
+                                            colors: {
+                                                primary: '#3b82f6',
+                                                background: DARK_CARD,
+                                                surface: DARK_CARD,
+                                                outline: DARK_BORDER,
+                                                onSurface: '#ffffff',
+                                                placeholder: '#a1a1aa',
+                                            },
+                                        }}
+                                    />
+                                </View>
+
+                                {/* File Attachments */}
+                                <View style={styles.section}>
+                                    <Text style={styles.label}>Attachments</Text>
+                                    <TouchableOpacity style={styles.uploadButton} onPress={handleFileUpload}>
+                                        <Icon name="file-pdf-box" size={20} color="#3b82f6" />
+                                        <Text style={styles.uploadButtonText}>Attach PDF (max 100MB)</Text>
+                                    </TouchableOpacity>
+
+                                    {attachedFiles.map((file, index) => (
+                                        <View key={index} style={styles.fileItem}>
+                                            <Icon name="file-pdf-box" size={16} color="#ef4444" />
+                                            <View style={styles.fileInfo}>
+                                                <Text style={styles.fileName}>{file.name}</Text>
+                                                <Text style={styles.fileSize}>
+                                                    {file.size && file.size > 0
+                                                        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                                                        : 'Size unknown'}
+                                                </Text>
+                                            </View>
+                                            <TouchableOpacity onPress={() => removeFile(index)}>
+                                                <Icon name="close" size={16} color="#ef4444" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+
+                                {/* Generate Link Button */}
+                                <View style={styles.section}>
+                                    <Button
+                                        mode="contained"
+                                        onPress={generatePaymentLink}
+                                        loading={loading}
+                                        disabled={loading || !selectedUser || !amount || !currency}
+                                        style={styles.generateButton}
+                                        labelStyle={styles.generateButtonText}
+                                    >
+                                        Generate Payment Link
+                                    </Button>
+                                </View>
+                            </List.Accordion>
 
                             {/* Generated Link */}
                             {generatedLink && (
@@ -813,44 +892,41 @@ export default function PaymentLinksScreen() {
                 <View style={styles.content}>
                     {/* Monthly Metrics Section */}
                     <View style={styles.metricsSection}>
-                        <View style={styles.metricsHeader}>
-                            <Text style={styles.metricsTitle}>This Month</Text>
-                            <TouchableOpacity
-                                style={styles.refreshButton}
-                                onPress={loadPaymentRequests}
-                                disabled={loadingRequests}
-                            >
-                                <Icon
-                                    name={loadingRequests ? "loading" : "refresh"}
-                                    size={20}
-                                    color="#3b82f6"
-                                />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.metricsGrid}>
-                            <MetricsCard
-                                title="Revenue (AR)"
-                                amount={monthlyMetrics.revenue}
-                                currency={monthlyMetrics.currency}
-                                color="#10b981"
-                                icon="trending-up"
-                            />
-                            <MetricsCard
-                                title="Expenses (AP)"
-                                amount={monthlyMetrics.expenses}
-                                currency={monthlyMetrics.currency}
-                                color="#ef4444"
-                                icon="trending-down"
-                            />
-                            <MetricsCard
-                                title="Cash Flow"
-                                amount={monthlyMetrics.cashFlow}
-                                currency={monthlyMetrics.currency}
-                                color={monthlyMetrics.cashFlow >= 0 ? "#10b981" : "#ef4444"}
-                                icon={monthlyMetrics.cashFlow >= 0 ? "cash-plus" : "cash-minus"}
-                            />
-                        </View>
+                        <List.Accordion
+                            title="This Month's Metrics"
+                            titleStyle={[styles.metricsTitle, { alignSelf: 'center', paddingVertical: 0 }]}
+                            style={[styles.metricsAccordion, { paddingVertical: 0, minHeight: 48 }]}
+                            left={props => (
+                                <List.Icon {...props} icon="chart-bar" color="#3b82f6" style={{ marginLeft: 16, alignSelf: 'center' }} />
+                            )}
+                            theme={{ colors: { background: DARK_CARD } }}
+                        >
+                            <View style={styles.metricsAccordionContent}>
+                                <View style={styles.metricsGrid}>
+                                    <MetricsCard
+                                        title="Revenue (AR)"
+                                        amount={monthlyMetrics.revenue}
+                                        currency={monthlyMetrics.currency}
+                                        color="#10b981"
+                                        icon="trending-up"
+                                    />
+                                    <MetricsCard
+                                        title="Expenses (AP)"
+                                        amount={monthlyMetrics.expenses}
+                                        currency={monthlyMetrics.currency}
+                                        color="#ef4444"
+                                        icon="trending-down"
+                                    />
+                                    <MetricsCard
+                                        title="Cash Flow"
+                                        amount={monthlyMetrics.cashFlow}
+                                        currency={monthlyMetrics.currency}
+                                        color={monthlyMetrics.cashFlow >= 0 ? "#10b981" : "#ef4444"}
+                                        icon={monthlyMetrics.cashFlow >= 0 ? "cash-plus" : "cash-minus"}
+                                    />
+                                </View>
+                            </View>
+                        </List.Accordion>
                     </View>
 
                     {/* Payment Requests List */}
@@ -1029,9 +1105,8 @@ const styles = StyleSheet.create({
         fontFamily: 'monospace',
         marginTop: 4,
     },
-    // ... include all your existing styles for the Create form
     section: {
-        marginBottom: 24,
+        marginTop: 24,
     },
     sectionTitle: {
         fontSize: 20,
@@ -1139,7 +1214,7 @@ const styles = StyleSheet.create({
         marginLeft: 8,
     },
     generateButton: {
-        backgroundColor: '#3b82f6',
+        backgroundColor: '#6d28d9',
         paddingVertical: 8,
     },
     generateButtonText: {
@@ -1178,6 +1253,7 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: 'bold',
         color: '#ffffff',
+        alignSelf: 'center',
     },
     refreshButton: {
         padding: 8,
@@ -1226,5 +1302,22 @@ const styles = StyleSheet.create({
         color: '#a1a1aa',
         fontSize: 12,
         marginTop: 2,
+    },
+    loginMessage: {
+        color: "#f87171",
+        fontSize: 18,
+        fontWeight: "500",
+        textAlign: "center",
+        marginTop: 24,
+        marginHorizontal: 24,
+    },
+    metricsAccordion: {
+        backgroundColor: DARK_CARD,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: DARK_BORDER,
+    },
+    metricsAccordionContent: {
+        padding: 16,
     },
 });

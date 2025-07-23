@@ -13,7 +13,7 @@ import { StatusBar } from "expo-status-bar";
 import { Provider as PaperProvider, Appbar } from "react-native-paper";
 import { PrivyProvider } from '@privy-io/expo';
 import { PrivyElements } from '@privy-io/expo/ui';
-import { OverlayProvider, Chat } from "stream-chat-expo";
+import { OverlayProvider, Chat, ChannelPreview } from "stream-chat-expo";
 import { Tabs } from 'expo-router';
 import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
@@ -108,6 +108,21 @@ const streamChatTheme = {
       backgroundColor: '#18181b',
     },
   },
+  channelPreview: {
+    unreadContainer: {
+      backgroundColor: "#27272a",
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    unreadText: {
+      color: "#fff",
+      fontSize: 14,
+    },
+    container: {
+      backgroundColor: "#18181b",
+    },
+  },
 };
 
 const styles = StyleSheet.create({
@@ -154,6 +169,15 @@ function AppContent() {
           title: "Link",
           tabBarIcon: ({ color }: { color: string }) => (
             <Appbar.Action icon="link" iconColor={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="buy"
+        options={{
+          title: "Buy",
+          tabBarIcon: ({ color }: { color: string }) => (
+            <Appbar.Action icon="currency-usd" iconColor={color} />
           ),
         }}
       />

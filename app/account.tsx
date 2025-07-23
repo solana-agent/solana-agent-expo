@@ -4,7 +4,8 @@ import Constants from "expo-constants";
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from "react";
 import { Alert, Image, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
-import { ActivityIndicator, Button, IconButton, Text, Menu } from "react-native-paper";
+import { ActivityIndicator, Appbar, Button, IconButton, Text, Menu } from "react-native-paper";
+import { useRouter } from "expo-router";
 import { PushNotificationService } from '../components/PushNotificationService';
 import { useAppStore } from './store/Store';
 import { disconnectChatUser } from "../config/chatConfig";
@@ -52,6 +53,7 @@ function currencyName(fiat: string): string {
 export default function AccountScreen() {
   const { isReady, user, logout, getAccessToken } = usePrivy();
   const wallet = useEmbeddedSolanaWallet();
+  const router = useRouter();
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [currencyMenuVisible, setCurrencyMenuVisible] = useState(false);
@@ -271,166 +273,176 @@ export default function AccountScreen() {
   if (isReady && user && walletAddress)
     return (
       <View style={{ flex: 1, backgroundColor: DARK_NAV }}>
+        <Appbar.Header style={styles.header}>
+          <Appbar.BackAction iconColor="#fff" onPress={() => router.back()} />
+          <Appbar.Content title="Account" titleStyle={styles.headerTitle} />
+        </Appbar.Header>
         <View style={styles.accountContent}>
-          {/* Avatar Section */}
-          <View style={styles.avatarSection}>
-            <TouchableOpacity
-              style={styles.avatarContainer}
-              onPress={selectAndUploadAvatar}
-              disabled={uploadingAvatar}
-            >
-              {avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-              ) : (
-                <View style={styles.defaultAvatar}>
-                  <Text style={styles.avatarPlaceholder}>
-                    {username || '?'}
-                  </Text>
-                </View>
-              )}
-
-              {uploadingAvatar && (
-                <View style={styles.uploadingOverlay}>
-                  <ActivityIndicator size="small" color="#fff" />
-                </View>
-              )}
-
-              <View style={styles.cameraIcon}>
-                <IconButton
-                  icon="camera"
-                  iconColor="#fff"
-                  size={20}
-                  style={{ margin: 0 }}
-                />
-              </View>
-            </TouchableOpacity>
-
-            {avatarUrl && (
-              <Button
-                mode="text"
-                onPress={removeAvatar}
-                labelStyle={styles.removeAvatarText}
-                style={{ marginTop: 8 }}
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Avatar Section */}
+            <View style={styles.avatarSection}>
+              <TouchableOpacity
+                style={styles.avatarContainer}
+                onPress={selectAndUploadAvatar}
+                disabled={uploadingAvatar}
               >
-                Remove Avatar
-              </Button>
-            )}
-          </View>
-
-          {/* Display Name Section */}
-          {displayName && (
-            <View style={styles.sectionContainer}>
-              <Text style={styles.displayNameLabel}>Name</Text>
-              <View style={styles.displayNameContainer}>
-                <View style={styles.displayNameBox}>
-                  <Text style={styles.displayNameText}>{displayName}</Text>
-                </View>
-                <IconButton
-                  icon="content-copy"
-                  iconColor="#a3a3a3"
-                  size={24}
-                  onPress={() => copyToClipboard(displayName, "Name")}
-                  style={styles.copyButton}
-                />
-              </View>
-            </View>
-          )}
-
-          {/* Username Section */}
-          {username && (
-            <View style={styles.sectionContainer}>
-              <Text style={styles.usernameLabel}>Username</Text>
-              <View style={styles.usernameContainer}>
-                <View style={styles.usernameBox}>
-                  <Text style={styles.usernameText}>@{username}</Text>
-                </View>
-                <IconButton
-                  icon="content-copy"
-                  iconColor="#a3a3a3"
-                  size={24}
-                  onPress={() => copyToClipboard(username, "Username")}
-                  style={styles.copyButton}
-                />
-              </View>
-            </View>
-          )}
-
-          {/* Wallet Address Section */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.addressLabel}>Wallet Address</Text>
-            <View style={styles.addressContainer}>
-              <View style={styles.addressBox}>
-                <Text selectable style={styles.addressText}>{walletAddress}</Text>
-              </View>
-              <IconButton
-                icon="content-copy"
-                iconColor="#a3a3a3"
-                size={24}
-                onPress={() => copyToClipboard(walletAddress, "Wallet address")}
-                style={styles.copyButton}
-              />
-            </View>
-          </View>
-
-          {/* Preferred Currency Section */}
-          <View style={styles.sectionContainer}>
-            <Text style={styles.addressLabel}>Preferred Currency</Text>
-            <View style={styles.addressContainer}>
-              <Menu
-                visible={currencyMenuVisible}
-                onDismiss={() => setCurrencyMenuVisible(false)}
-                contentStyle={styles.menuContent}
-                anchor={
-                  <TouchableOpacity
-                    style={styles.currencyDropdown}
-                    onPress={() => setCurrencyMenuVisible(true)}
-                  >
-                    <Text style={styles.currencyText}>
-                      {currencyName(preferredCurrency)}
+                {avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+                ) : (
+                  <View style={styles.defaultAvatar}>
+                    <Text style={styles.avatarPlaceholder}>
+                      {username || '?'}
                     </Text>
-                    <IconButton
-                      icon="chevron-down"
-                      iconColor="#a3a3a3"
-                      size={20}
-                      style={{ margin: 0 }}
-                    />
-                  </TouchableOpacity>
-                }
-              >
-                <ScrollView style={{ maxHeight: 200 }}>
-                  {ALLOWED_FIAT.map((fiat) => (
-                    <Menu.Item
-                      key={fiat}
-                      onPress={() => {
-                        setPreferredCurrency(fiat);
-                        setCurrencyMenuVisible(false);
-                      }}
-                      title={currencyName(fiat)}
-                      titleStyle={styles.menuItemText}
-                    />
-                  ))}
-                </ScrollView>
-              </Menu>
-            </View>
-          </View>
+                  </View>
+                )}
 
-          <Button
-            mode="contained"
-            onPress={() => handleLogout()}
-            style={styles.logoutButton}
-            labelStyle={styles.logoutLabel}
-            contentStyle={styles.logoutContent}
-          >
-            Log out
-          </Button>
+                {uploadingAvatar && (
+                  <View style={styles.uploadingOverlay}>
+                    <ActivityIndicator size="small" color="#fff" />
+                  </View>
+                )}
+
+                <View style={styles.cameraIcon}>
+                  <IconButton
+                    icon="camera"
+                    iconColor="#fff"
+                    size={20}
+                    style={{ margin: 0 }}
+                  />
+                </View>
+              </TouchableOpacity>
+
+              {avatarUrl && (
+                <Button
+                  mode="text"
+                  onPress={removeAvatar}
+                  labelStyle={styles.removeAvatarText}
+                  style={{ marginTop: 8 }}
+                >
+                  Remove Avatar
+                </Button>
+              )}
+            </View>
+
+            {/* Display Name Section */}
+            {displayName && (
+              <View style={styles.sectionContainer}>
+                <Text style={styles.displayNameLabel}>Name</Text>
+                <View style={styles.displayNameContainer}>
+                  <View style={styles.displayNameBox}>
+                    <Text style={styles.displayNameText}>{displayName}</Text>
+                  </View>
+                  <IconButton
+                    icon="content-copy"
+                    iconColor="#a3a3a3"
+                    size={24}
+                    onPress={() => copyToClipboard(displayName, "Name")}
+                    style={styles.copyButton}
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Username Section */}
+            {username && (
+              <View style={styles.sectionContainer}>
+                <Text style={styles.usernameLabel}>Username</Text>
+                <View style={styles.usernameContainer}>
+                  <View style={styles.usernameBox}>
+                    <Text style={styles.usernameText}>@{username}</Text>
+                  </View>
+                  <IconButton
+                    icon="content-copy"
+                    iconColor="#a3a3a3"
+                    size={24}
+                    onPress={() => copyToClipboard(username, "Username")}
+                    style={styles.copyButton}
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Wallet Address Section */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.addressLabel}>Wallet Address</Text>
+              <View style={styles.addressContainer}>
+                <View style={styles.addressBox}>
+                  <Text selectable style={styles.addressText}>{walletAddress}</Text>
+                </View>
+                <IconButton
+                  icon="content-copy"
+                  iconColor="#a3a3a3"
+                  size={24}
+                  onPress={() => copyToClipboard(walletAddress, "Wallet address")}
+                  style={styles.copyButton}
+                />
+              </View>
+            </View>
+
+            {/* Preferred Currency Section */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.addressLabel}>Preferred Currency</Text>
+              <View style={styles.addressContainer}>
+                <Menu
+                  visible={currencyMenuVisible}
+                  onDismiss={() => setCurrencyMenuVisible(false)}
+                  contentStyle={styles.menuContent}
+                  anchor={
+                    <TouchableOpacity
+                      style={styles.currencyDropdown}
+                      onPress={() => setCurrencyMenuVisible(true)}
+                    >
+                      <Text style={styles.currencyText}>
+                        {currencyName(preferredCurrency)}
+                      </Text>
+                      <IconButton
+                        icon="chevron-down"
+                        iconColor="#a3a3a3"
+                        size={20}
+                        style={{ margin: 0 }}
+                      />
+                    </TouchableOpacity>
+                  }
+                >
+                  <ScrollView style={{ maxHeight: 200 }}>
+                    {ALLOWED_FIAT.map((fiat) => (
+                      <Menu.Item
+                        key={fiat}
+                        onPress={() => {
+                          setPreferredCurrency(fiat);
+                          setCurrencyMenuVisible(false);
+                        }}
+                        title={currencyName(fiat)}
+                        titleStyle={styles.menuItemText}
+                      />
+                    ))}
+                  </ScrollView>
+                </Menu>
+              </View>
+            </View>
+
+            <Button
+              mode="contained"
+              onPress={() => handleLogout()}
+              style={styles.logoutButton}
+              labelStyle={styles.logoutLabel}
+              contentStyle={styles.logoutContent}
+            >
+              Log out
+            </Button>
+          </ScrollView>
         </View>
       </View>
     );
 
   return (
     <View style={{ flex: 1, backgroundColor: DARK_NAV }}>
+      <Appbar.Header style={styles.header}>
+        <Appbar.BackAction iconColor="#fff" onPress={() => router.back()} />
+        <Appbar.Content title="Account" titleStyle={styles.headerTitle} />
+      </Appbar.Header>
       <View style={styles.accountContent}>
-        <Text style={{ color: "#fff" }}>Please login to view your account</Text>
+        <Text style={styles.loginMessage}>Please login to view your account</Text>
       </View>
     </View>
   );
@@ -439,13 +451,14 @@ export default function AccountScreen() {
 const styles = StyleSheet.create({
   accountContent: {
     flex: 1,
-    alignItems: "center",
+    alignItems: "stretch",
     justifyContent: "center",
     padding: 24,
   },
   avatarSection: {
     alignItems: "center",
     marginBottom: 32,
+    marginTop: 16,
   },
   avatarContainer: {
     position: "relative",
@@ -531,6 +544,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 12,
+    width: '100%',
   },
   addressBox: {
     backgroundColor: "#27272a",
@@ -588,7 +602,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 18,
     maxWidth: 300,
-    flex: 1,
   },
   currencyText: {
     color: "#fff",
@@ -629,5 +642,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     letterSpacing: 0.5,
+  },
+  loginMessage: {
+    color: "#f87171",        // Consistent error color
+    fontSize: 18,            // Consistent font size
+    fontWeight: "500",       // Medium weight
+    textAlign: "center",     // Centered
+    marginTop: 24,           // Some spacing
+    marginHorizontal: 24,    // Padding for smaller screens
+  },
+  header: {
+    backgroundColor: "#18181b",
+    elevation: 0,
+    shadowOpacity: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: "#3f3f46",
+  },
+  headerTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
   },
 });

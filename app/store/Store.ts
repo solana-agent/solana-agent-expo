@@ -31,7 +31,7 @@ interface IAppStore extends IChatData {
   setChatConnected: (connected: boolean) => void;
   setChatConnectAttempted: (attempted: boolean) => void;
   setCheckingUsername: (checking: boolean) => void;
-  setPreferredCurrency: (currency: string) => void; // Add this action
+  setPreferredCurrency: (currency: string) => void;
   setChatData: (data: Partial<IChatData>) => void;
   clearChatData: () => void;
 }

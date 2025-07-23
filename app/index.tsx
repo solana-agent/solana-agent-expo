@@ -27,6 +27,7 @@ import {
 import Hyperlink from "react-native-hyperlink";
 import NfcManager, { Ndef, NfcEvents } from "react-native-nfc-manager";
 import {
+  Appbar,
   Button,
   Card,
   Modal,
@@ -1542,6 +1543,9 @@ export default function Chat() {
   if (isReady && user && alreadyDelegated && biometricAuthenticated && username && chatConnected) {
     return (
       <PaperProvider>
+        <Appbar.Header style={styles.header}>
+          <Appbar.Content title="Agent" titleStyle={styles.headerTitle} />
+        </Appbar.Header>
         <PaymentConfirmationModal />
         <PaymentLoadingOverlay />
         <KeyboardAvoidingView
@@ -1595,11 +1599,6 @@ export default function Chat() {
                 placeholderTextColor="#a3a3a3"
                 blurOnSubmit={false}
                 returnKeyType="send"
-                // disable copy and paste to prevent prompt injection
-                contextMenuHidden={true}
-                selectTextOnFocus={false}
-                selectionColor="transparent"
-                onSelectionChange={() => { }}
               />
               <TouchableOpacity
                 style={[
@@ -1840,5 +1839,17 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  header: {
+    backgroundColor: "#18181b",
+    elevation: 0,
+    shadowOpacity: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: "#3f3f46",
+  },
+  headerTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
   },
 });
