@@ -9,6 +9,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAppStore } from './store/Store';
 import Constants from 'expo-constants';
 import { usePrivy } from '@privy-io/expo';
+import { Swipeable } from 'react-native-gesture-handler';
 
 const API_URL = Constants.expoConfig?.extra?.apiUrl;
 
@@ -16,27 +17,22 @@ const DARK_BG = "#18181b";
 const DARK_CARD = "#27272a";
 const DARK_BORDER = "#3f3f46";
 
-const ALLOWED_FIAT = [
-    'AUD', 'BRL', 'CAD', 'CHF', 'CLP', 'CNH', 'COP', 'EUR', 'GBP', 'IDR',
-    'INR', 'JPY', 'KRW', 'MXN', 'NOK', 'NZD', 'PEN', 'PHP', 'SEK', 'SGD',
-    'TRY', 'TWD', 'USD', 'ZAR',
-];
-
 // Add types for payment requests
 interface PaymentRequest {
     id: string;
     amount: number;
-    currency: string;
-    token: string;
     payee: string;
     payer: string;
     dueDate: number;
-    status: 'outstanding' | 'accepted' | 'paid' | 'rejected' | 'expired';
-    type: 'AR' | 'AP'; // Accounts Receivable (you sent) or Accounts Payable (you received)
+    status: string;
+    type: string; // 'AR' or 'AP'
     externalId?: string;
     memo?: string;
     createdAt: string;
     link: string;
+    attachments?: { id?: string; filename?: string; url?: string; size?: number }[];
+    fee_percent: number;
+    fee_total: number;
 }
 
 // Add these interfaces near the top with your existing interfaces
@@ -44,39 +40,6 @@ interface MonthlyMetrics {
     revenue: number; // AR - money coming in (you're receiving)
     expenses: number; // AP - money going out (you're paying)
     cashFlow: number; // revenue - expenses
-    currency: string; // Primary currency for display
-}
-
-function getCurrencySymbol(fiat: string | undefined | null): string {
-    if (!fiat) return '';
-    if (!ALLOWED_FIAT.includes(fiat)) return '';
-    switch (fiat) {
-        case 'AUD': return '$';
-        case 'BRL': return '$';
-        case 'CAD': return '$';
-        case 'CHF': return 'CHF';
-        case 'CLP': return '$';
-        case 'CNH': return '¥';
-        case 'COP': return '$';
-        case 'EUR': return '€';
-        case 'GBP': return '£';
-        case 'IDR': return 'Rp';
-        case 'INR': return '₹';
-        case 'JPY': return '¥';
-        case 'KRW': return '₩';
-        case 'MXN': return '$';
-        case 'NOK': return 'kr';
-        case 'NZD': return '$';
-        case 'PEN': return 'S/';
-        case 'PHP': return '₱';
-        case 'SEK': return 'kr';
-        case 'SGD': return '$';
-        case 'TRY': return '₺';
-        case 'TWD': return '$';
-        case 'USD': return '$';
-        case 'ZAR': return 'R';
-        default: return '';
-    }
 }
 
 // Add this function to calculate metrics from payment requests
@@ -116,57 +79,8 @@ const calculateMonthlyMetrics = (requests: PaymentRequest[]): MonthlyMetrics => 
         revenue,
         expenses,
         cashFlow: revenue - expenses,
-        currency: 'USD' // Default to USD for now
     };
 };
-
-function currencyName(fiat: string): string {
-    switch (fiat) {
-        case 'AUD': return 'Australian Dollars';
-        case 'BRL': return 'Brazilian Reais';
-        case 'CAD': return 'Canadian Dollars';
-        case 'CHF': return 'Swiss Francs';
-        case 'CLP': return 'Chilean Pesos';
-        case 'CNH': return 'Chinese Yuan';
-        case 'COP': return 'Colombian Pesos';
-        case 'EUR': return 'Euros';
-        case 'GBP': return 'British Pounds';
-        case 'IDR': return 'Indonesian Rupiah';
-        case 'INR': return 'Indian Rupees';
-        case 'JPY': return 'Japanese Yen';
-        case 'KRW': return 'South Korean Won';
-        case 'MXN': return 'Mexican Pesos';
-        case 'NOK': return 'Norwegian Kroner';
-        case 'NZD': return 'New Zealand Dollars';
-        case 'PEN': return 'Peruvian Soles';
-        case 'PHP': return 'Philippine Pesos';
-        case 'SEK': return 'Swedish Kronor';
-        case 'SGD': return 'Singapore Dollars';
-        case 'TRY': return 'Turkish Lira';
-        case 'TWD': return 'New Taiwan Dollars';
-        case 'USD': return 'United States Dollars';
-        case 'ZAR': return 'South African Rand';
-        default: return '';
-    }
-}
-
-function formatCurrency(value: string, currency: string): string {
-    // Remove non-numeric characters except decimal point
-    const numericValue = value.replace(/[^0-9.]/g, '');
-
-    // Prevent multiple decimal points
-    const parts = numericValue.split('.');
-    if (parts.length > 2) {
-        return parts[0] + '.' + parts.slice(1).join('');
-    }
-
-    // Limit decimal places to 2
-    if (parts[1] && parts[1].length > 2) {
-        return parts[0] + '.' + parts[1].substring(0, 2);
-    }
-
-    return numericValue;
-}
 
 function getStatusColor(status: string): string {
     switch (status) {
@@ -278,9 +192,7 @@ export default function PaymentLinksScreen() {
 
     // Form state (for Create tab)
     const [selectedUser, setSelectedUser] = useState<any>(null);
-    const [currency, setCurrency] = useState('USD');
     const [amount, setAmount] = useState('');
-    const [token, setToken] = useState('USDC');
     const [dueDate, setDueDate] = useState(new Date());
     const [externalId, setExternalId] = useState('');
     const [attachedFiles, setAttachedFiles] = useState<any[]>([]);
@@ -291,8 +203,6 @@ export default function PaymentLinksScreen() {
     const [loadingRequests, setLoadingRequests] = useState(false);
 
     // UI state
-    const [currencyMenuVisible, setCurrencyMenuVisible] = useState(false);
-    const [tokenMenuVisible, setTokenMenuVisible] = useState(false);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [showUserSearch, setShowUserSearch] = useState(false);
@@ -301,7 +211,6 @@ export default function PaymentLinksScreen() {
         revenue: 0,
         expenses: 0,
         cashFlow: 0,
-        currency: preferredCurrency || 'USD' // Use preferred currency
     });
     const [formExpanded, setFormExpanded] = useState(true);
     const scrollViewRef = useRef<ScrollView>(null);
@@ -313,16 +222,6 @@ export default function PaymentLinksScreen() {
             loadPaymentRequests();
         }
     }, [selectedTab]);
-
-    // Update token when currency changes
-    useEffect(() => {
-        if (currency === 'EUR') {
-            setToken('EURC');
-        } else if (currency === 'USD') {
-            setToken('USDC');
-        }
-        // For other currencies, keep the current token selection (don't auto-change)
-    }, [currency]);
 
     // Update the loadPaymentRequests function to calculate metrics
     // Update the loadPaymentRequests function to use preferred currency in API call
@@ -352,14 +251,12 @@ export default function PaymentLinksScreen() {
                         revenue: data.metrics.revenue,
                         expenses: data.metrics.expenses,
                         cashFlow: data.metrics.cashFlow,
-                        currency: preferredCurrency
                     });
                 } else {
                     // Fallback: calculate metrics locally (but amounts won't be converted)
                     const metrics = calculateMonthlyMetrics(requests);
                     setMonthlyMetrics({
                         ...metrics,
-                        currency: preferredCurrency
                     });
                 }
             }
@@ -370,12 +267,12 @@ export default function PaymentLinksScreen() {
         }
     };
 
-    const MetricsCard = ({ title, amount, currency, color, icon }: {
+    const MetricsCard = ({ title, amount, color, icon, token }: {
         title: string;
         amount: number;
-        currency: string;
         color: string;
         icon: string;
+        token: string;
     }) => (
         <View style={[styles.metricCard, { borderLeftColor: color }]}>
             <View style={styles.metricHeader}>
@@ -383,12 +280,11 @@ export default function PaymentLinksScreen() {
                 <Text style={styles.metricTitle}>{title}</Text>
             </View>
             <Text style={[styles.metricAmount, { color }]}>
-                {getCurrencySymbol(currency)}{Math.abs(amount).toLocaleString('en-US', {
+                {Math.abs(amount).toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
-                })}
+                })} {token}
             </Text>
-            <Text style={styles.metricCurrency}>{currency}</Text>
         </View>
     );
 
@@ -398,8 +294,7 @@ export default function PaymentLinksScreen() {
     };
 
     const handleAmountChange = (value: string) => {
-        const formatted = formatCurrency(value, currency);
-        setAmount(formatted);
+        setAmount(value);
     };
 
     const handleDateChange = (event: any, selectedDate?: Date) => {
@@ -449,7 +344,7 @@ export default function PaymentLinksScreen() {
     };
 
     const generatePaymentLink = async () => {
-        if (!selectedUser || !amount || !currency) {
+        if (!selectedUser || !amount) {
             Alert.alert('Missing Information', 'Please fill in all required fields');
             return;
         }
@@ -468,8 +363,7 @@ export default function PaymentLinksScreen() {
             formData.append('payee', selectedUser.id);
             formData.append('payer', username);
             formData.append('amount', amount);
-            formData.append('currency', currency);
-            formData.append('token', token);
+            formData.append('token', 'USDC'); // Assuming USDC is the only token for now
             formData.append('dueDate', Math.floor(dueDate.getTime() / 1000).toString());
 
             if (externalId) {
@@ -507,9 +401,7 @@ export default function PaymentLinksScreen() {
 
             // Clear all form fields except the generated link
             setSelectedUser(null);
-            setCurrency('USD');
             setAmount('');
-            setToken('USDC');
             setDueDate(new Date());
             setExternalId('');
             setAttachedFiles([]);
@@ -534,6 +426,111 @@ export default function PaymentLinksScreen() {
         }
     };
 
+    const handleAcceptPayment = async (item: PaymentRequest) => {
+        try {
+            setLoadingRequests(true);
+            const accessToken = await getAccessToken();
+            if (!accessToken) throw new Error('No access token available');
+
+            const response = await fetch(`${API_URL}/payment/request/${item.id}/accept`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to accept payment request');
+            }
+
+            Alert.alert('Success', 'Payment request accepted! The payment will be processed.');
+            loadPaymentRequests();
+        } catch (error) {
+            console.error('Error accepting payment request:', error);
+            Alert.alert('Error', `Failed to accept payment request: ${error}`);
+        } finally {
+            setLoadingRequests(false);
+        }
+    };
+
+    const handleDenyPayment = async (item: PaymentRequest) => {
+        Alert.alert(
+            'Deny Payment Request',
+            'Are you sure you want to deny this payment request?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Deny',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setLoadingRequests(true);
+                            const accessToken = await getAccessToken();
+                            if (!accessToken) throw new Error('No access token available');
+
+                            const response = await fetch(`${API_URL}/payment/request/${item.id}/deny`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${accessToken}`,
+                                    'Content-Type': 'application/json',
+                                },
+                            });
+
+                            if (!response.ok) {
+                                const errorData = await response.json();
+                                throw new Error(errorData.message || 'Failed to deny payment request');
+                            }
+
+                            Alert.alert('Payment Denied', 'The payment request has been denied.');
+                            loadPaymentRequests();
+                        } catch (error) {
+                            console.error('Error denying payment request:', error);
+                            Alert.alert('Error', `Failed to deny payment request: ${error}`);
+                        } finally {
+                            setLoadingRequests(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    // Swipe actions for each card
+    const renderRightActions = (item: PaymentRequest) => (
+        <View style={{ flexDirection: 'row', height: '100%' }}>
+            {item.status === 'outstanding' && (
+                <>
+                    <TouchableOpacity
+                        style={{
+                            backgroundColor: '#10b981',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            width: 80,
+                        }}
+                        onPress={() => handleAcceptPayment(item)}
+                    >
+                        <Icon name="check" size={28} color="#fff" />
+                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Accept</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={{
+                            backgroundColor: '#ef4444',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            width: 80,
+                        }}
+                        onPress={() => handleDenyPayment(item)}
+                    >
+                        <Icon name="close" size={28} color="#fff" />
+                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Deny</Text>
+                    </TouchableOpacity>
+                </>
+            )}
+        </View>
+    );
+
     // In your copyLink function:
     const copyLink = async () => {
         if (generatedLink) {
@@ -544,9 +541,7 @@ export default function PaymentLinksScreen() {
 
     const resetForm = () => {
         setSelectedUser(null);
-        setCurrency('USD');
         setAmount('');
-        setToken('USDC');
         setDueDate(new Date());
         setExternalId('');
         setAttachedFiles([]);
@@ -557,47 +552,49 @@ export default function PaymentLinksScreen() {
         // Navigate to detailed view - you can create this later
         Alert.alert(
             'Payment Request Details',
-            `Amount: ${request.amount} ${request.currency}\nStatus: ${request.status}\nType: ${request.type}\nDue: ${new Date(request.dueDate * 1000).toLocaleDateString()}`
+            `Amount: ${request.amount} USDC\nStatus: ${request.status}\nType: ${request.type}\nDue: ${new Date(request.dueDate * 1000).toLocaleDateString()}`
         );
     };
 
     const renderPaymentRequestCard = ({ item }: { item: PaymentRequest }) => (
-        <TouchableOpacity onPress={() => handleRequestPress(item)}>
-            <Card style={styles.requestCard}>
-                <Card.Content>
-                    <View style={styles.requestHeader}>
-                        <View style={styles.requestAmount}>
-                            <Text style={styles.amountText}>
-                                {item.amount} {item.currency}
+        <Swipeable renderRightActions={() => renderRightActions(item)}>
+            <TouchableOpacity onPress={() => handleRequestPress(item)}>
+                <Card style={styles.requestCard}>
+                    <Card.Content>
+                        <View style={styles.requestHeader}>
+                            <View style={styles.requestAmount}>
+                                <Text style={styles.amountText}>
+                                    {item.amount} USDC
+                                </Text>
+                                <Text style={styles.tokenText}>USDC</Text>
+                            </View>
+                            <View style={styles.requestBadges}>
+                                <View style={[styles.typeBadge, { backgroundColor: item.type === 'AR' ? '#3b82f6' : '#f59e0b' }]}>
+                                    <Text style={styles.badgeText}>{item.type}</Text>
+                                </View>
+                                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+                                    <Icon name={getStatusIcon(item.status)} size={12} color="#fff" />
+                                    <Text style={styles.badgeText}>{item.status}</Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        <View style={styles.requestInfo}>
+                            <Text style={styles.requestLabel}>
+                                {item.type === 'AR' ? 'Payee:' : 'Payer:'} {item.type === 'AR' ? item.payee : item.payer}
                             </Text>
-                            <Text style={styles.tokenText}>{item.token}</Text>
+                            <Text style={styles.requestDate}>
+                                Due: {new Date(item.dueDate * 1000).toLocaleDateString()}
+                            </Text>
                         </View>
-                        <View style={styles.requestBadges}>
-                            <View style={[styles.typeBadge, { backgroundColor: item.type === 'AR' ? '#3b82f6' : '#f59e0b' }]}>
-                                <Text style={styles.badgeText}>{item.type}</Text>
-                            </View>
-                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-                                <Icon name={getStatusIcon(item.status)} size={12} color="#fff" />
-                                <Text style={styles.badgeText}>{item.status}</Text>
-                            </View>
-                        </View>
-                    </View>
 
-                    <View style={styles.requestInfo}>
-                        <Text style={styles.requestLabel}>
-                            {item.type === 'AR' ? 'Payee:' : 'Payer:'} {item.type === 'AR' ? item.payee : item.payer}
-                        </Text>
-                        <Text style={styles.requestDate}>
-                            Due: {new Date(item.dueDate * 1000).toLocaleDateString()}
-                        </Text>
-                    </View>
-
-                    {item.externalId && (
-                        <Text style={styles.externalId}>ID: {item.externalId}</Text>
-                    )}
-                </Card.Content>
-            </Card>
-        </TouchableOpacity>
+                        {item.externalId && (
+                            <Text style={styles.externalId}>ID: {item.externalId}</Text>
+                        )}
+                    </Card.Content>
+                </Card>
+            </TouchableOpacity>
+        </Swipeable>
     );
 
     if (!username) {
@@ -657,314 +654,232 @@ export default function PaymentLinksScreen() {
 
             {/* Tab Content */}
             {selectedTab === 'create' ? (
-                <ScrollView
-                    ref={scrollViewRef}
-                    style={styles.content}
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={styles.contentContainerWithTabBar}
-                >
-                    {showUserSearch ? (
-                        <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Select Payee</Text>
-                            <PayeeSearch onSelect={handleUserSelect} onClose={() => setShowUserSearch(false)} />
-                        </View>
-                    ) : (
-                        <>
-                            <List.Accordion
-                                title="Create Payment Link"
-                                expanded={formExpanded}
-                                onPress={() => setFormExpanded(!formExpanded)}
-                                left={props => <List.Icon {...props} icon="form-select" color="#3b82f6" />}
-                                style={styles.metricsAccordion}
-                                theme={{ colors: { background: DARK_CARD } }}
-                            >
-                                {/* Payee Selection */}
-                                <View style={styles.section}>
-                                    <Text style={styles.label}>To (Payee) *</Text>
-                                    {selectedUser ? (
-                                        <TouchableOpacity
-                                            style={styles.selectedUser}
-                                            onPress={() => setShowUserSearch(true)}
-                                        >
-                                            <Text style={styles.selectedUserText}>
-                                                {selectedUser.name || selectedUser.id}
-                                            </Text>
-                                            <Icon name="pencil" size={20} color="#a1a1aa" />
-                                        </TouchableOpacity>
-                                    ) : (
-                                        <TouchableOpacity
-                                            style={styles.selectButton}
-                                            onPress={() => setShowUserSearch(true)}
-                                        >
-                                            <Text style={styles.selectButtonText}>Select Payee</Text>
-                                            <Icon name="chevron-right" size={20} color="#a1a1aa" />
-                                        </TouchableOpacity>
-                                    )}
-                                </View>
-
-                                {/* Currency Selection */}
-                                <View style={styles.section}>
-                                    <Text style={styles.label}>Currency *</Text>
-                                    <Menu
-                                        visible={currencyMenuVisible}
-                                        onDismiss={() => setCurrencyMenuVisible(false)}
-                                        contentStyle={styles.menuContent}
-                                        anchor={
-                                            <TouchableOpacity
-                                                style={styles.dropdown}
-                                                onPress={() => setCurrencyMenuVisible(true)}
-                                            >
-                                                <Text style={styles.dropdownText}>
-                                                    {currencyName(currency)}
-                                                </Text>
-                                                <Icon name="chevron-down" size={20} color="#a1a1aa" />
-                                            </TouchableOpacity>
-                                        }
-                                    >
-                                        <ScrollView style={{ maxHeight: 200 }}>
-                                            {ALLOWED_FIAT.map((fiat) => (
-                                                <Menu.Item
-                                                    key={fiat}
-                                                    onPress={() => {
-                                                        setCurrency(fiat);
-                                                        setCurrencyMenuVisible(false);
-                                                    }}
-                                                    title={currencyName(fiat)}
-                                                    titleStyle={styles.menuItemText}
-                                                />
-                                            ))}
-                                        </ScrollView>
-                                    </Menu>
-                                </View>
-
-                                {/* Amount Input */}
-                                <View style={styles.section}>
-                                    <Text style={styles.label}>Amount *</Text>
-                                    <TextInput
-                                        style={styles.textInput}
-                                        value={amount}
-                                        onChangeText={handleAmountChange}
-                                        placeholder="0.00"
-                                        keyboardType="decimal-pad"
-                                        mode="outlined"
-                                        theme={{
-                                            colors: {
-                                                primary: '#3b82f6',
-                                                background: DARK_CARD,
-                                                surface: DARK_CARD,
-                                                outline: DARK_BORDER,
-                                                onSurface: '#ffffff',
-                                                placeholder: '#a1a1aa',
-                                            },
-                                        }}
-                                    />
-                                </View>
-
-                                {/* Token Selection (only show if not USD/EUR) */}
-                                {currency !== 'USD' && currency !== 'EUR' && (
-                                    <View style={styles.section}>
-                                        <Text style={styles.label}>Token</Text>
-                                        <Menu
-                                            visible={tokenMenuVisible}
-                                            onDismiss={() => setTokenMenuVisible(false)}
-                                            contentStyle={styles.menuContent}
-                                            anchor={
-                                                <TouchableOpacity
-                                                    style={styles.dropdown}
-                                                    onPress={() => setTokenMenuVisible(true)}
-                                                >
-                                                    <Text style={styles.dropdownText}>{token}</Text>
-                                                    <Icon name="chevron-down" size={20} color="#a1a1aa" />
-                                                </TouchableOpacity>
-                                            }
-                                        >
-                                            <Menu.Item
-                                                onPress={() => {
-                                                    setToken('USDC');
-                                                    setTokenMenuVisible(false);
-                                                }}
-                                                title="USDC"
-                                                titleStyle={styles.menuItemText}
-                                            />
-                                            <Menu.Item
-                                                onPress={() => {
-                                                    setToken('EURC');
-                                                    setTokenMenuVisible(false);
-                                                }}
-                                                title="EURC"
-                                                titleStyle={styles.menuItemText}
-                                            />
-                                        </Menu>
-                                    </View>
-                                )}
-
-                                {/* Due Date */}
-                                <View style={styles.section}>
-                                    <Text style={styles.label}>Due Date *</Text>
-                                    <View style={styles.dateTimeContainer}>
-                                        <TouchableOpacity
-                                            style={[styles.dropdown, { flex: 1, marginRight: 8 }]}
-                                            onPress={() => setShowDatePicker(true)}
-                                        >
-                                            <Text style={styles.dropdownText}>
-                                                {dueDate.toLocaleDateString()}
-                                            </Text>
-                                            <Icon name="calendar" size={20} color="#a1a1aa" />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={[styles.dropdown, { flex: 1 }]}
-                                            onPress={() => setShowTimePicker(true)}
-                                        >
-                                            <Text style={styles.dropdownText}>
-                                                {dueDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </Text>
-                                            <Icon name="clock" size={20} color="#a1a1aa" />
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-
-                                {/* External ID */}
-                                <View style={styles.section}>
-                                    <Text style={styles.label}>External ID</Text>
-                                    <TextInput
-                                        style={styles.textInput}
-                                        value={externalId}
-                                        onChangeText={setExternalId}
-                                        placeholder="Optional reference ID"
-                                        mode="outlined"
-                                        theme={{
-                                            colors: {
-                                                primary: '#3b82f6',
-                                                background: DARK_CARD,
-                                                surface: DARK_CARD,
-                                                outline: DARK_BORDER,
-                                                onSurface: '#ffffff',
-                                                placeholder: '#a1a1aa',
-                                            },
-                                        }}
-                                    />
-                                </View>
-
-                                {/* File Attachments */}
-                                <View style={styles.section}>
-                                    <Text style={styles.label}>Attachments</Text>
-                                    <TouchableOpacity style={styles.uploadButton} onPress={handleFileUpload}>
-                                        <Icon name="file-pdf-box" size={20} color="#3b82f6" />
-                                        <Text style={styles.uploadButtonText}>Attach PDF (max 100MB)</Text>
-                                    </TouchableOpacity>
-
-                                    {attachedFiles.map((file, index) => (
-                                        <View key={index} style={styles.fileItem}>
-                                            <Icon name="file-pdf-box" size={16} color="#ef4444" />
-                                            <View style={styles.fileInfo}>
-                                                <Text style={styles.fileName}>{file.name}</Text>
-                                                <Text style={styles.fileSize}>
-                                                    {file.size && file.size > 0
-                                                        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-                                                        : 'Size unknown'}
-                                                </Text>
-                                            </View>
-                                            <TouchableOpacity onPress={() => removeFile(index)}>
-                                                <Icon name="close" size={16} color="#ef4444" />
-                                            </TouchableOpacity>
-                                        </View>
-                                    ))}
-                                </View>
-
-                                {/* Generate Link Button */}
-                                <View style={styles.section}>
-                                    <Button
-                                        mode="contained"
-                                        onPress={generatePaymentLink}
-                                        loading={loading}
-                                        disabled={loading || !selectedUser || !amount || !currency}
-                                        style={styles.generateButton}
-                                        labelStyle={styles.generateButtonText}
-                                    >
-                                        Generate Payment Link
-                                    </Button>
-                                </View>
-                            </List.Accordion>
-
-                            {/* Generated Link */}
-                            {generatedLink && (
-                                <View style={styles.section}>
-                                    <Text style={styles.label}>Payment Link</Text>
-                                    <View style={styles.linkContainer}>
-                                        <Text style={styles.linkText}>{generatedLink}</Text>
-                                        <TouchableOpacity style={styles.copyButton} onPress={copyLink}>
-                                            <Icon name="content-copy" size={20} color="#3b82f6" />
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-                            )}
-                        </>
-                    )}
-                </ScrollView>
-            ) : (
-                // Created Links Tab
-                <View style={styles.content}>
-                    {/* Monthly Metrics Section */}
-                    <View style={styles.metricsSection}>
+                showUserSearch ? (
+                    <View style={[styles.content, { flex: 1 }]}>
+                        <Text style={styles.sectionTitle}>Select Payee</Text>
+                        <PayeeSearch onSelect={handleUserSelect} onClose={() => setShowUserSearch(false)} />
+                    </View>
+                ) : (
+                    <ScrollView
+                        ref={scrollViewRef}
+                        style={styles.content}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={styles.contentContainerWithTabBar}
+                    >
                         <List.Accordion
-                            title="This Month's Metrics"
-                            titleStyle={[styles.metricsTitle, { alignSelf: 'center', paddingVertical: 0 }]}
-                            style={[styles.metricsAccordion, { paddingVertical: 0, minHeight: 48 }]}
-                            left={props => (
-                                <List.Icon {...props} icon="chart-bar" color="#3b82f6" style={{ marginLeft: 16, alignSelf: 'center' }} />
-                            )}
+                            title="Create Payment Link"
+                            expanded={formExpanded}
+                            onPress={() => setFormExpanded(!formExpanded)}
+                            left={props => <List.Icon {...props} icon="form-select" color="#3b82f6" />}
+                            style={styles.metricsAccordion}
                             theme={{ colors: { background: DARK_CARD } }}
                         >
-                            <View style={styles.metricsAccordionContent}>
-                                <View style={styles.metricsGrid}>
-                                    <MetricsCard
-                                        title="Revenue (AR)"
-                                        amount={monthlyMetrics.revenue}
-                                        currency={monthlyMetrics.currency}
-                                        color="#10b981"
-                                        icon="trending-up"
-                                    />
-                                    <MetricsCard
-                                        title="Expenses (AP)"
-                                        amount={monthlyMetrics.expenses}
-                                        currency={monthlyMetrics.currency}
-                                        color="#ef4444"
-                                        icon="trending-down"
-                                    />
-                                    <MetricsCard
-                                        title="Cash Flow"
-                                        amount={monthlyMetrics.cashFlow}
-                                        currency={monthlyMetrics.currency}
-                                        color={monthlyMetrics.cashFlow >= 0 ? "#10b981" : "#ef4444"}
-                                        icon={monthlyMetrics.cashFlow >= 0 ? "cash-plus" : "cash-minus"}
-                                    />
+                            {/* Payee Selection */}
+                            <View style={styles.section}>
+                                <Text style={styles.label}>To (Payee) *</Text>
+                                {selectedUser ? (
+                                    <TouchableOpacity
+                                        style={styles.selectedUser}
+                                        onPress={() => setShowUserSearch(true)}
+                                    >
+                                        <Text style={styles.selectedUserText}>
+                                            {selectedUser.name || selectedUser.id}
+                                        </Text>
+                                        <Icon name="pencil" size={20} color="#a1a1aa" />
+                                    </TouchableOpacity>
+                                ) : (
+                                    <TouchableOpacity
+                                        style={styles.selectButton}
+                                        onPress={() => setShowUserSearch(true)}
+                                    >
+                                        <Text style={styles.selectButtonText}>Select Payee</Text>
+                                        <Icon name="chevron-right" size={20} color="#a1a1aa" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            {/* Amount Input */}
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Amount *</Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    value={amount}
+                                    onChangeText={handleAmountChange}
+                                    placeholder="0.00"
+                                    keyboardType="decimal-pad"
+                                    mode="outlined"
+                                    theme={{
+                                        colors: {
+                                            primary: '#3b82f6',
+                                            background: DARK_CARD,
+                                            surface: DARK_CARD,
+                                            outline: DARK_BORDER,
+                                            onSurface: '#ffffff',
+                                            placeholder: '#a1a1aa',
+                                        },
+                                    }}
+                                />
+                            </View>
+
+                            {/* Due Date */}
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Due Date *</Text>
+                                <View style={styles.dateTimeContainer}>
+                                    <TouchableOpacity
+                                        style={[styles.dropdown, { flex: 1, marginRight: 8 }]}
+                                        onPress={() => setShowDatePicker(true)}
+                                    >
+                                        <Text style={styles.dropdownText}>
+                                            {dueDate.toLocaleDateString()}
+                                        </Text>
+                                        <Icon name="calendar" size={20} color="#a1a1aa" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.dropdown, { flex: 1 }]}
+                                        onPress={() => setShowTimePicker(true)}
+                                    >
+                                        <Text style={styles.dropdownText}>
+                                            {dueDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </Text>
+                                        <Icon name="clock" size={20} color="#a1a1aa" />
+                                    </TouchableOpacity>
                                 </View>
                             </View>
-                        </List.Accordion>
-                    </View>
 
-                    {/* Payment Requests List */}
-                    {loadingRequests ? (
-                        <View style={styles.centerContent}>
-                            <ActivityIndicator size="large" color="#3b82f6" />
-                            <Text style={styles.loadingText}>Loading payment requests...</Text>
+                            {/* External ID */}
+                            <View style={styles.section}>
+                                <Text style={styles.label}>External ID</Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    value={externalId}
+                                    onChangeText={setExternalId}
+                                    placeholder="Optional reference ID"
+                                    mode="outlined"
+                                    theme={{
+                                        colors: {
+                                            primary: '#3b82f6',
+                                            background: DARK_CARD,
+                                            surface: DARK_CARD,
+                                            outline: DARK_BORDER,
+                                            onSurface: '#ffffff',
+                                            placeholder: '#a1a1aa',
+                                        },
+                                    }}
+                                />
+                            </View>
+
+                            {/* File Attachments */}
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Attachments</Text>
+                                <TouchableOpacity style={styles.uploadButton} onPress={handleFileUpload}>
+                                    <Icon name="file-pdf-box" size={20} color="#3b82f6" />
+                                    <Text style={styles.uploadButtonText}>Attach PDF (max 100MB)</Text>
+                                </TouchableOpacity>
+
+                                {attachedFiles.map((file, index) => (
+                                    <View key={index} style={styles.fileItem}>
+                                        <Icon name="file-pdf-box" size={16} color="#ef4444" />
+                                        <View style={styles.fileInfo}>
+                                            <Text style={styles.fileName}>{file.name}</Text>
+                                            <Text style={styles.fileSize}>
+                                                {file.size && file.size > 0
+                                                    ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                                                    : 'Size unknown'}
+                                            </Text>
+                                        </View>
+                                        <TouchableOpacity onPress={() => removeFile(index)}>
+                                            <Icon name="close" size={16} color="#ef4444" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+
+                            {/* Generate Link Button */}
+                            <View style={styles.section}>
+                                <Button
+                                    mode="contained"
+                                    onPress={generatePaymentLink}
+                                    loading={loading}
+                                    disabled={loading || !selectedUser || !amount}
+                                    style={styles.generateButton}
+                                    labelStyle={styles.generateButtonText}
+                                >
+                                    Generate Payment Link
+                                </Button>
+                            </View>
+                        </List.Accordion>
+
+                        {/* Generated Link */}
+                        {generatedLink && (
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Payment Link</Text>
+                                <View style={styles.linkContainer}>
+                                    <Text style={styles.linkText}>{generatedLink}</Text>
+                                    <TouchableOpacity style={styles.copyButton} onPress={copyLink}>
+                                        <Icon name="content-copy" size={20} color="#3b82f6" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+                    </ScrollView>
+                )
+            ) : (
+                <FlatList
+                    data={paymentRequests}
+                    renderItem={renderPaymentRequestCard}
+                    keyExtractor={(item) => item.id}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.listContainer}
+                    ListHeaderComponent={
+                        <View style={styles.metricsSection}>
+                            <List.Accordion
+                                title="This Month's Metrics"
+                                titleStyle={[styles.metricsTitle, { alignSelf: 'center', paddingVertical: 0 }]}
+                                style={[styles.metricsAccordion, { paddingVertical: 0, minHeight: 48 }]}
+                                left={props => (
+                                    <List.Icon {...props} icon="chart-bar" color="#3b82f6" style={{ marginLeft: 16, alignSelf: 'center' }} />
+                                )}
+                                theme={{ colors: { background: DARK_CARD } }}
+                            >
+                                <View style={styles.metricsAccordionContent}>
+                                    <View style={styles.metricsGrid}>
+                                        <MetricsCard
+                                            title="Revenue (AR)"
+                                            amount={monthlyMetrics.revenue}
+                                            color="#10b981"
+                                            icon="trending-up"
+                                            token="USDC"
+                                        />
+                                        <MetricsCard
+                                            title="Expenses (AP)"
+                                            amount={monthlyMetrics.expenses}
+                                            color="#ef4444"
+                                            icon="trending-down"
+                                            token="USDC"
+                                        />
+                                        <MetricsCard
+                                            title="Cash Flow"
+                                            amount={monthlyMetrics.cashFlow}
+                                            color={monthlyMetrics.cashFlow >= 0 ? "#10b981" : "#ef4444"}
+                                            icon={monthlyMetrics.cashFlow >= 0 ? "cash-plus" : "cash-minus"}
+                                            token="USDC"
+                                        />
+                                    </View>
+                                </View>
+                            </List.Accordion>
                         </View>
-                    ) : paymentRequests.length === 0 ? (
+                    }
+                    ListEmptyComponent={
                         <View style={styles.centerContent}>
                             <Icon name="receipt" size={64} color="#6b7280" />
                             <Text style={styles.emptyText}>No payment requests yet</Text>
                             <Text style={styles.emptySubtext}>Create your first payment link to get started</Text>
                         </View>
-                    ) : (
-                        <FlatList
-                            data={paymentRequests}
-                            renderItem={renderPaymentRequestCard}
-                            keyExtractor={(item) => item.id}
-                            showsVerticalScrollIndicator={false}
-                            contentContainerStyle={styles.listContainer}
-                        />
-                    )}
-                </View>
+                    }
+                    ListFooterComponent={<View style={{ height: 48 }} />}
+                    refreshing={loadingRequests}
+                    onRefresh={loadPaymentRequests}
+                />
             )}
 
             {/* Date/Time Pickers */}

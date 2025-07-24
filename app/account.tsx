@@ -13,50 +13,12 @@ import { disconnectChatUser } from "../config/chatConfig";
 const DARK_NAV = "#18181b";
 const API_URL = Constants.expoConfig?.extra?.apiUrl;
 
-// Add the ALLOWED_FIAT constant
-const ALLOWED_FIAT = [
-  'AUD', 'BRL', 'CAD', 'CHF', 'CLP', 'CNH', 'COP', 'EUR', 'GBP', 'IDR',
-  'INR', 'JPY', 'KRW', 'MXN', 'NOK', 'NZD', 'PEN', 'PHP', 'SEK', 'SGD',
-  'TRY', 'TWD', 'USD', 'ZAR',
-];
-
-function currencyName(fiat: string): string {
-  switch (fiat) {
-    case 'AUD': return 'Australian Dollars';
-    case 'BRL': return 'Brazilian Reais';
-    case 'CAD': return 'Canadian Dollars';
-    case 'CHF': return 'Swiss Francs';
-    case 'CLP': return 'Chilean Pesos';
-    case 'CNH': return 'Chinese Yuan';
-    case 'COP': return 'Colombian Pesos';
-    case 'EUR': return 'Euros';
-    case 'GBP': return 'British Pounds';
-    case 'IDR': return 'Indonesian Rupiah';
-    case 'INR': return 'Indian Rupees';
-    case 'JPY': return 'Japanese Yen';
-    case 'KRW': return 'South Korean Won';
-    case 'MXN': return 'Mexican Pesos';
-    case 'NOK': return 'Norwegian Kroner';
-    case 'NZD': return 'New Zealand Dollars';
-    case 'PEN': return 'Peruvian Soles';
-    case 'PHP': return 'Philippine Pesos';
-    case 'SEK': return 'Swedish Kronor';
-    case 'SGD': return 'Singapore Dollars';
-    case 'TRY': return 'Turkish Lira';
-    case 'TWD': return 'New Taiwan Dollars';
-    case 'USD': return 'United States Dollars';
-    case 'ZAR': return 'South African Rand';
-    default: return 'USD';
-  }
-}
-
 export default function AccountScreen() {
   const { isReady, user, logout, getAccessToken } = usePrivy();
   const wallet = useEmbeddedSolanaWallet();
   const router = useRouter();
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [currencyMenuVisible, setCurrencyMenuVisible] = useState(false);
 
   const walletAddress =
     wallet?.wallets && wallet.wallets.length > 0 && wallet.wallets[0]?.address
@@ -70,8 +32,6 @@ export default function AccountScreen() {
     setAvatarUrl,
     displayName,
     setDisplayName,
-    preferredCurrency,
-    setPreferredCurrency,
     clearChatData
   } = useAppStore();
 
@@ -376,48 +336,6 @@ export default function AccountScreen() {
                   onPress={() => copyToClipboard(walletAddress, "Wallet address")}
                   style={styles.copyButton}
                 />
-              </View>
-            </View>
-
-            {/* Preferred Currency Section */}
-            <View style={styles.sectionContainer}>
-              <Text style={styles.addressLabel}>Preferred Currency</Text>
-              <View style={styles.addressContainer}>
-                <Menu
-                  visible={currencyMenuVisible}
-                  onDismiss={() => setCurrencyMenuVisible(false)}
-                  contentStyle={styles.menuContent}
-                  anchor={
-                    <TouchableOpacity
-                      style={styles.currencyDropdown}
-                      onPress={() => setCurrencyMenuVisible(true)}
-                    >
-                      <Text style={styles.currencyText}>
-                        {currencyName(preferredCurrency)}
-                      </Text>
-                      <IconButton
-                        icon="chevron-down"
-                        iconColor="#a3a3a3"
-                        size={20}
-                        style={{ margin: 0 }}
-                      />
-                    </TouchableOpacity>
-                  }
-                >
-                  <ScrollView style={{ maxHeight: 200 }}>
-                    {ALLOWED_FIAT.map((fiat) => (
-                      <Menu.Item
-                        key={fiat}
-                        onPress={() => {
-                          setPreferredCurrency(fiat);
-                          setCurrencyMenuVisible(false);
-                        }}
-                        title={currencyName(fiat)}
-                        titleStyle={styles.menuItemText}
-                      />
-                    ))}
-                  </ScrollView>
-                </Menu>
               </View>
             </View>
 

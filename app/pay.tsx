@@ -1,21 +1,18 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Linking, Alert, ActivityIndicator, StyleSheet } from "react-native";
-import { Appbar, Portal, Modal, Button } from "react-native-paper";
+import { Appbar, Button } from "react-native-paper";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import Constants from "expo-constants";
 import { usePrivy } from "@privy-io/expo";
 
 const API_URL = Constants.expoConfig?.extra?.apiUrl;
 const DARK_BG = "#18181b";
-const PURPLE_800 = "#6d28d9";
-const BLUE_400 = "#60a5fa";
 
-// Payment Request type from your index.tsx
+// Payment Request type
 type PaymentRequest = {
   id: string;
   amount: number;
-  currency: string;
   token: string;
   payee: string;
   payer: string;
@@ -32,80 +29,12 @@ type PaymentRequest = {
     url: string;
     size: number;
   }>;
-  human: string;
+  human?: string;
   to?: string;
+  live_token_amount: number;
+  fee_percent: number;
+  fee_total: number;
 };
-
-// Currency functions from your index.tsx
-const ALLOWED_FIAT = [
-  'AUD', 'BRL', 'CAD', 'CHF', 'CLP', 'CNH', 'COP', 'EUR', 'GBP', 'IDR',
-  'INR', 'JPY', 'KRW', 'MXN', 'NOK', 'NZD', 'PEN', 'PHP', 'SEK', 'SGD',
-  'TRY', 'TWD', 'USD', 'ZAR',
-];
-
-function currencySymbol(fiat: string | undefined | null): string {
-  if (!fiat) return '';
-  if (!ALLOWED_FIAT.includes(fiat)) return '';
-  switch (fiat) {
-    case 'AUD': return '$';
-    case 'BRL': return '$';
-    case 'CAD': return '$';
-    case 'CHF': return 'CHF';
-    case 'CLP': return '$';
-    case 'CNH': return '¥';
-    case 'COP': return '$';
-    case 'EUR': return '€';
-    case 'GBP': return '£';
-    case 'IDR': return 'Rp';
-    case 'INR': return '₹';
-    case 'JPY': return '¥';
-    case 'KRW': return '₩';
-    case 'MXN': return '$';
-    case 'NOK': return 'kr';
-    case 'NZD': return '$';
-    case 'PEN': return 'S/';
-    case 'PHP': return '₱';
-    case 'SEK': return 'kr';
-    case 'SGD': return '$';
-    case 'TRY': return '₺';
-    case 'TWD': return '$';
-    case 'USD': return '$';
-    case 'ZAR': return 'R';
-    default: return '';
-  }
-}
-
-function currencyName(fiat: string | undefined): string {
-  if (!fiat) return '';
-  if (!ALLOWED_FIAT.includes(fiat)) return '';
-  switch (fiat) {
-    case 'AUD': return 'Australian Dollars';
-    case 'BRL': return 'Brazilian Reais';
-    case 'CAD': return 'Canadian Dollars';
-    case 'CHF': return 'Swiss Francs';
-    case 'CLP': return 'Chilean Pesos';
-    case 'CNH': return 'Chinese Yuan';
-    case 'COP': return 'Colombian Pesos';
-    case 'EUR': return 'Euros';
-    case 'GBP': return 'British Pounds';
-    case 'IDR': return 'Indonesian Rupiah';
-    case 'INR': return 'Indian Rupees';
-    case 'JPY': return 'Japanese Yen';
-    case 'KRW': return 'South Korean Won';
-    case 'MXN': return 'Mexican Pesos';
-    case 'NOK': return 'Norwegian Kroner';
-    case 'NZD': return 'New Zealand Dollars';
-    case 'PEN': return 'Peruvian Soles';
-    case 'PHP': return 'Philippine Pesos';
-    case 'SEK': return 'Swedish Kronor';
-    case 'SGD': return 'Singapore Dollars';
-    case 'TRY': return 'Turkish Lira';
-    case 'TWD': return 'New Taiwan Dollars';
-    case 'USD': return 'United States Dollars';
-    case 'ZAR': return 'South African Rand';
-    default: return '';
-  }
-}
 
 export default function PayScreen() {
   const { id } = useLocalSearchParams();
@@ -155,21 +84,12 @@ export default function PayScreen() {
     }, [id, getAccessToken])
   );
 
-  // Payment confirmation handlers from your index.tsx
   const handleAcceptPayment = async () => {
-    if (!payment?.id) {
-      console.error('No payment request ID');
-      return;
-    }
-
+    if (!payment?.id) return;
     setLoadingPaymentRequest(true);
-
     try {
       const jwt = await getAccessToken();
-      if (!jwt) {
-        throw new Error('No access token available');
-      }
-
+      if (!jwt) throw new Error('No access token available');
       const response = await fetch(`${API_URL}/payment/request/${payment.id}/accept`, {
         method: 'POST',
         headers: {
@@ -177,18 +97,12 @@ export default function PayScreen() {
           'Content-Type': 'application/json',
         },
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to accept payment request');
       }
-
-      const result = await response.json();
-      console.log('Payment request accepted:', result);
-
       Alert.alert('Success', 'Payment request accepted! The payment will be processed.');
       router.back();
-
     } catch (error) {
       console.error('Error accepting payment request:', error);
       Alert.alert('Error', `Failed to accept payment request: ${error}`);
@@ -198,32 +112,20 @@ export default function PayScreen() {
   };
 
   const handleDenyPayment = async () => {
-    if (!payment?.id) {
-      console.error('No payment request ID');
-      return;
-    }
-
-    // Show confirmation dialog first
+    if (!payment?.id) return;
     Alert.alert(
       'Deny Payment Request',
       'Are you sure you want to deny this payment request?',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Deny',
           style: 'destructive',
           onPress: async () => {
             setLoadingPaymentRequest(true);
-
             try {
               const jwt = await getAccessToken();
-              if (!jwt) {
-                throw new Error('No access token available');
-              }
-
+              if (!jwt) throw new Error('No access token available');
               const response = await fetch(`${API_URL}/payment/request/${payment.id}/deny`, {
                 method: 'POST',
                 headers: {
@@ -231,18 +133,12 @@ export default function PayScreen() {
                   'Content-Type': 'application/json',
                 },
               });
-
               if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.message || 'Failed to deny payment request');
               }
-
-              const result = await response.json();
-              console.log('Payment request denied:', result);
-
               Alert.alert('Payment Denied', 'The payment request has been denied.');
               router.back();
-
             } catch (error) {
               console.error('Error denying payment request:', error);
               Alert.alert('Error', `Failed to deny payment request: ${error}`);
@@ -277,7 +173,6 @@ export default function PayScreen() {
     );
   }
 
-  // --- Payment Denied Screen ---
   if (payment.status === "rejected") {
     return (
       <View style={{ flex: 1, backgroundColor: DARK_BG, justifyContent: "center", alignItems: "center" }}>
@@ -313,12 +208,9 @@ export default function PayScreen() {
             <Text style={styles.infoLabel}>Amount</Text>
             <View style={styles.amountContainer}>
               <Text style={styles.amountValue}>
-                {currencySymbol(payment.currency)}{payment.amount}
+                {payment.amount} USDC
               </Text>
             </View>
-            <Text style={styles.currencyText}>
-              {currencyName(payment.currency)}
-            </Text>
           </View>
 
           {/* Requesting User Section */}
@@ -363,28 +255,35 @@ export default function PayScreen() {
           {payment.attachments && payment.attachments.length > 0 && (
             <View style={styles.infoSection}>
               <Text style={styles.infoLabel}>Attachments</Text>
-              <ScrollView style={{ maxHeight: 120 }}>
-                {payment.attachments.map((attachment, index) => (
-                  <TouchableOpacity
-                    key={attachment.id || index}
-                    style={styles.attachmentItem}
-                    onPress={() => {
-                      Linking.openURL(attachment.url).catch(err => {
-                        console.error('Failed to open attachment:', err);
-                      });
+              {payment.attachments.map((attachment, index) => (
+                <TouchableOpacity
+                  key={attachment.id || index}
+                  style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+                  onPress={() => {
+                    Linking.openURL(attachment.url).catch(err => {
+                      console.error('Failed to open attachment:', err);
+                    });
+                  }}
+                >
+                  <Icon name="file-pdf-box" size={20} color="#3b82f6" style={{ marginRight: 8 }} />
+                  <Text
+                    style={{
+                      color: "#3b82f6",
+                      textDecorationLine: "underline",
+                      fontSize: 16,
+                      flexShrink: 1,
+                      marginRight: 8,
                     }}
+                    numberOfLines={1}
                   >
-                    <Icon name="file-pdf-box" size={16} color="#3b82f6" />
-                    <Text style={styles.attachmentText}>
-                      {attachment.filename}
-                    </Text>
-                    <Text style={styles.attachmentSize}>
-                      ({(attachment.size / (1024 * 1024)).toFixed(1)} MB)
-                    </Text>
-                    <Icon name="external-link" size={14} color="#a1a1aa" />
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+                    {attachment.filename}
+                  </Text>
+                  <Text style={{ color: "#a1a1aa", fontSize: 12 }}>
+                    {attachment.size ? `(${(attachment.size / (1024 * 1024)).toFixed(1)} MB)` : ""}
+                  </Text>
+                  <Icon name="open-in-new" size={16} color="#a1a1aa" style={{ marginLeft: 4 }} />
+                </TouchableOpacity>
+              ))}
             </View>
           )}
 
@@ -392,9 +291,20 @@ export default function PayScreen() {
           <View style={styles.infoSection}>
             <Text style={styles.infoLabel}>You will pay</Text>
             <Text style={styles.payAmountText}>
-              ≈ {payment.amount} {payment.token || "USDC"}
+              ≈ {payment.live_token_amount} USDC
             </Text>
           </View>
+        </View>
+
+        {/* Fee section */}
+        <View style={styles.infoSection}>
+          <Text style={styles.infoLabel}>Fee</Text>
+          <Text style={styles.payAmountText}>
+            {payment.fee_percent}% ({payment.fee_total} USDC)
+          </Text>
+          <Text style={{ color: "#a1a1aa", fontSize: 12, textAlign: "center" }}>
+            The fee is additional to the amount you will pay.
+          </Text>
         </View>
 
         {/* Footer Buttons */}
@@ -430,7 +340,6 @@ export default function PayScreen() {
   );
 }
 
-// All styles from your index.tsx
 const styles = StyleSheet.create({
   centerContent: {
     flex: 1,
@@ -491,12 +400,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "600",
     color: "#ffffff",
-  },
-  currencyText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
-    marginTop: 4,
   },
   addressText: {
     fontFamily: "monospace",
