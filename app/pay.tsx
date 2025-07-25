@@ -1,15 +1,18 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Linking, Alert, ActivityIndicator, StyleSheet } from "react-native";
-import { Appbar, Button } from "react-native-paper";
+import { Appbar, IconButton } from "react-native-paper";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import Constants from "expo-constants";
-import { usePrivy } from "@privy-io/expo";
+import { useEmbeddedSolanaWallet, usePrivy } from "@privy-io/expo";
 
 const API_URL = Constants.expoConfig?.extra?.apiUrl;
 const DARK_BG = "#18181b";
+const CARD_BG = "#23232b";
+const ACCENT = "#3b82f6";
+const ERROR = "#ef4444";
+const BORDER = "#27272a";
 
-// Payment Request type
 type PaymentRequest = {
   id: string;
   amount: number;
@@ -44,6 +47,14 @@ export default function PayScreen() {
   const [payment, setPayment] = useState<PaymentRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingPaymentRequest, setLoadingPaymentRequest] = useState(false);
+  const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
+  const wallet = useEmbeddedSolanaWallet();
+  const [loadingBalance, setLoadingBalance] = useState(false);
+
+  const walletAddress =
+    wallet?.wallets && wallet.wallets.length > 0 && wallet.wallets[0]?.address
+      ? wallet.wallets[0]?.address
+      : null;
 
   useFocusEffect(
     useCallback(() => {
@@ -74,6 +85,26 @@ export default function PayScreen() {
           if (!res.ok) throw new Error("Payment not found");
           const data = await res.json();
           setPayment(data.request);
+
+          // Fetch USDC balance
+          try {
+            const balanceRes = await fetch(`${API_URL}/wallet/balance?wallet_address=${walletAddress}&token=USDC`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${jwt}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            if (balanceRes.ok) {
+              const balanceData = await balanceRes.json();
+              setUsdcBalance(balanceData.balance); // expects { balance: number }
+            } else {
+              setUsdcBalance(null);
+            }
+          } catch {
+            setUsdcBalance(null);
+          }
+
         } catch (e: any) {
           setError(e.message);
         } finally {
@@ -151,6 +182,31 @@ export default function PayScreen() {
     );
   };
 
+  const fetchUsdcBalance = async () => {
+    try {
+      setLoadingBalance(true);
+      const accessToken = await getAccessToken();
+      if (!accessToken || !walletAddress) return;
+      const response = await fetch(`${API_URL}/wallet/balance?wallet_address=${walletAddress}&token=USDC`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUsdcBalance(data.balance);
+      } else {
+        setUsdcBalance(null);
+      }
+    } catch (error) {
+      setUsdcBalance(null);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
+
   const handleCancelPayment = () => {
     router.back();
   };
@@ -158,8 +214,8 @@ export default function PayScreen() {
   if (loading) {
     return (
       <View style={styles.centerContent}>
-        <ActivityIndicator size="large" color="#fff" />
-        <Text style={{ color: "#fff", marginTop: 10 }}>Loading payment request...</Text>
+        <ActivityIndicator size="large" color={ACCENT} />
+        <Text style={{ color: "#fff", marginTop: 10, fontSize: 18 }}>Loading payment request...</Text>
       </View>
     );
   }
@@ -167,23 +223,25 @@ export default function PayScreen() {
   if (error || !payment) {
     return (
       <View style={styles.centerContent}>
-        <Text style={{ color: "#f87171" }}>{error || "Payment not found"}</Text>
-        <Button onPress={() => router.back()} style={{ marginTop: 20 }}>Back</Button>
+        <Text style={{ color: ERROR, fontSize: 18 }}>{error || "Payment not found"}</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   if (payment.status === "rejected") {
     return (
-      <View style={{ flex: 1, backgroundColor: DARK_BG, justifyContent: "center", alignItems: "center" }}>
-        <Icon name="close-circle-outline" size={64} color="#ef4444" style={{ marginBottom: 24 }} />
+      <View style={styles.centerContent}>
+        <Icon name="close-circle-outline" size={64} color={ERROR} style={{ marginBottom: 24 }} />
         <Text style={{ color: "#fff", fontSize: 24, fontWeight: "bold", marginBottom: 12 }}>Payment Denied</Text>
         <Text style={{ color: "#d1d5db", fontSize: 16, textAlign: "center", marginBottom: 32, paddingHorizontal: 24 }}>
           This payment request has been denied and can no longer be paid.
         </Text>
-        <Button mode="contained" onPress={() => router.back()} style={{ backgroundColor: "#374151" }}>
-          <Text style={{ color: "#fff" }}>Back</Text>
-        </Button>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -195,98 +253,78 @@ export default function PayScreen() {
         <Appbar.Content title="Payment Request" titleStyle={styles.headerTitle} />
       </Appbar.Header>
 
-      <ScrollView contentContainerStyle={styles.modalContent}>
-        {/* Header */}
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Payment Request</Text>
-        </View>
-
-        {/* Content */}
-        <View style={styles.modalBody}>
-          {/* Amount Section */}
-          <View style={styles.infoSection}>
-            <Text style={styles.infoLabel}>Amount</Text>
-            <View style={styles.amountContainer}>
-              <Text style={styles.amountValue}>
-                {payment.amount} USDC
-              </Text>
-            </View>
-          </View>
-
-          {/* Requesting User Section */}
-          <View style={styles.infoSection}>
-            <Text style={styles.infoLabel}>Payee</Text>
-            <Text style={styles.addressText}>
-              {payment.payee}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.card}>
+          {/* Amount */}
+          <View style={styles.amountRow}>
+            <Icon name="currency-usd" size={32} color={ACCENT} style={{ marginRight: 12 }} />
+            <Text style={styles.amountText}>
+              {payment.amount !== undefined
+                ? `${Number(payment.amount).toFixed(2)} USDC`
+                : '--'}
             </Text>
           </View>
 
-          {/* Requesting User Section */}
-          <View style={styles.infoSection}>
-            <Text style={styles.infoLabel}>Payer</Text>
-            <Text style={styles.addressText}>
-              {payment.payer}
-            </Text>
+          {/* Payee & Payer */}
+          <View style={styles.row}>
+            <View style={styles.userBox}>
+              <Icon name="account-arrow-left" size={22} color={ACCENT} style={{ marginRight: 6 }} />
+              <Text style={styles.userLabel}>Payee</Text>
+              <Text style={styles.userValue}>{payment.payee}</Text>
+            </View>
+            <View style={styles.userBox}>
+              <Icon name="account-arrow-right" size={22} color={ACCENT} style={{ marginRight: 6 }} />
+              <Text style={styles.userLabel}>Payer</Text>
+              <Text style={styles.userValue}>{payment.payer}</Text>
+            </View>
           </View>
 
-          {/* Due Date Section */}
-          {payment.dueDate && (
-            <View style={styles.infoSection}>
-              <Text style={styles.infoLabel}>Due Date</Text>
-              <Text style={styles.memoText}>
-                {new Date(payment.dueDate * 1000).toLocaleDateString()}
-              </Text>
-            </View>
-          )}
+          {/* Due Date & Reference */}
+          <View style={styles.row}>
+            {payment.dueDate && (
+              <View style={styles.infoBox}>
+                <Icon name="calendar" size={20} color={ACCENT} style={{ marginRight: 6 }} />
+                <Text style={styles.infoLabel}>Due</Text>
+                <Text style={styles.infoValue}>{new Date(payment.dueDate * 1000).toLocaleDateString()}</Text>
+              </View>
+            )}
+            {payment.externalId && (
+              <View style={styles.infoBox}>
+                <Icon name="identifier" size={20} color={ACCENT} style={{ marginRight: 6 }} />
+                <Text style={styles.infoLabel}>Reference</Text>
+                <Text style={styles.infoValue}>{payment.externalId}</Text>
+              </View>
+            )}
+          </View>
 
-          {/* External ID Section */}
-          {payment.externalId && (
-            <View style={styles.infoSection}>
-              <Text style={styles.infoLabel}>Reference ID</Text>
-              <Text style={styles.memoText}>
-                {payment.externalId}
-              </Text>
-            </View>
-          )}
-
-          {/* Memo Section */}
+          {/* Memo */}
           {payment.memo && (
-            <View style={styles.infoSection}>
-              <Text style={styles.infoLabel}>Memo</Text>
-              <Text style={styles.memoText}>
-                {payment.memo}
-              </Text>
+            <View style={styles.memoBox}>
+              <Icon name="file-document-outline" size={20} color={ACCENT} style={{ marginRight: 6 }} />
+              <Text style={styles.memoLabel}>Memo</Text>
+              <Text style={styles.memoValue}>{payment.memo}</Text>
             </View>
           )}
 
-          {/* Attachments Section */}
+          {/* Attachments */}
           {payment.attachments && payment.attachments.length > 0 && (
-            <View style={styles.infoSection}>
-              <Text style={styles.infoLabel}>Attachments</Text>
+            <View style={styles.attachmentsBox}>
+              <Text style={styles.attachmentsLabel}>Attachments</Text>
               {payment.attachments.map((attachment, index) => (
                 <TouchableOpacity
                   key={attachment.id || index}
-                  style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+                  style={styles.attachmentItem}
                   onPress={() => {
                     Linking.openURL(attachment.url).catch(err => {
                       console.error('Failed to open attachment:', err);
                     });
                   }}
                 >
-                  <Icon name="file-pdf-box" size={20} color="#3b82f6" style={{ marginRight: 8 }} />
-                  <Text
-                    style={{
-                      color: "#3b82f6",
-                      textDecorationLine: "underline",
-                      fontSize: 16,
-                      flexShrink: 1,
-                      marginRight: 8,
-                    }}
-                    numberOfLines={1}
-                  >
+                  <Icon name="file-pdf-box" size={20} color={ACCENT} style={{ marginRight: 8 }} />
+                  <Text style={styles.attachmentText} numberOfLines={1}>
                     {attachment.filename}
                   </Text>
-                  <Text style={{ color: "#a1a1aa", fontSize: 12 }}>
+                  <Text style={styles.attachmentSize}>
                     {attachment.size ? `(${(attachment.size / (1024 * 1024)).toFixed(1)} MB)` : ""}
                   </Text>
                   <Icon name="open-in-new" size={16} color="#a1a1aa" style={{ marginLeft: 4 }} />
@@ -295,50 +333,80 @@ export default function PayScreen() {
             </View>
           )}
 
-          {/* Fee section */}
-          <View style={styles.infoSection}>
-            <Text style={styles.infoLabel}>Fee</Text>
-            <Text style={styles.payAmountText}>
-              {payment.fee_percent}% ({payment.fee_total} USDC)
-            </Text>
+          {/* Fee & Total */}
+          <View style={styles.row}>
+            <View style={styles.infoBox}>
+              <Icon name="percent" size={20} color={ACCENT} style={{ marginRight: 6 }} />
+              <Text style={styles.infoLabel}>Fee</Text>
+              <Text style={styles.infoValue}>{payment.fee_percent}% ({Number(payment.fee_total).toFixed(2)} USDC)</Text>
+            </View>
+            <View style={styles.infoBox}>
+              <Icon name="cash-check" size={20} color={ACCENT} style={{ marginRight: 6 }} />
+              <Text style={styles.infoLabel}>You Pay</Text>
+              <Text style={styles.infoValue}>{Number(payment.total_amount).toFixed(2)} USDC</Text>
+            </View>
           </View>
 
-          {/* You will pay section */}
-          <View style={styles.infoSection}>
-            <Text style={styles.infoLabel}>You will pay</Text>
-            <Text style={styles.payAmountText}>
-              {payment.total_amount} USDC
+          {/* USDC Balance */}
+          <View style={styles.balanceBox}>
+            <Icon name="wallet" size={22} color={ACCENT} style={{ marginRight: 8 }} />
+            <Text style={styles.balanceLabel}>Your USDC Balance</Text>
+            <Text style={styles.balanceValue}>
+              {usdcBalance !== null
+                ? `${Number(usdcBalance).toFixed(2)} USDC`
+                : 'Loading...'}
             </Text>
+            <IconButton
+              icon="refresh"
+              iconColor={ACCENT}
+              size={22}
+              onPress={fetchUsdcBalance}
+              style={styles.refreshButton}
+            />
           </View>
-        </View>
+          {usdcBalance !== null && payment && usdcBalance < payment.total_amount && (
+            <Text style={styles.balanceWarning}>
+              <Icon name="alert-circle" size={16} color={ERROR} /> Insufficient USDC balance to pay this invoice.
+            </Text>
+          )}
 
-        {/* Footer Buttons */}
-        <View style={styles.modalFooter}>
-          <TouchableOpacity
-            style={styles.confirmButton}
-            onPress={handleAcceptPayment}
-            disabled={loadingPaymentRequest}
-          >
-            {loadingPaymentRequest ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <Text style={styles.confirmButtonText}>Accept & Pay</Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.denyButton}
-            onPress={handleDenyPayment}
-            disabled={loadingPaymentRequest}
-          >
-            <Text style={styles.denyButtonText}>Deny</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={handleCancelPayment}
-            disabled={loadingPaymentRequest}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
+          {/* Footer Buttons */}
+          <View style={styles.footerRow}>
+            <TouchableOpacity
+              style={[
+                styles.confirmButton,
+                (loadingPaymentRequest ||
+                  (usdcBalance !== null && payment && usdcBalance < payment.total_amount))
+                  ? styles.confirmButtonDisabled
+                  : null
+              ]}
+              onPress={handleAcceptPayment}
+              disabled={
+                loadingPaymentRequest ||
+                (usdcBalance !== null && payment && usdcBalance < payment.total_amount)
+              }
+            >
+              {loadingPaymentRequest ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Text style={styles.confirmButtonText}>Accept & Pay</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.denyButton}
+              onPress={handleDenyPayment}
+              disabled={loadingPaymentRequest}
+            >
+              <Text style={styles.denyButtonText}>Deny</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={handleCancelPayment}
+              disabled={loadingPaymentRequest}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -357,136 +425,266 @@ const styles = StyleSheet.create({
     elevation: 0,
     shadowOpacity: 0,
     borderBottomWidth: 1,
-    borderBottomColor: "#3f3f46",
+    borderBottomColor: BORDER,
   },
   headerTitle: {
     color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 20,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
-  modalContent: {
+  scrollContent: {
     padding: 24,
     alignItems: "center",
-  },
-  modalHeader: {
-    marginBottom: 24,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#ffffff",
-    textAlign: "center",
-  },
-  modalBody: {
-    marginBottom: 24,
-  },
-  infoSection: {
-    marginBottom: 20,
-    alignItems: "center",
-  },
-  infoLabel: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#d1d5db",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  amountContainer: {
-    flexDirection: "row",
-    alignItems: "baseline",
     justifyContent: "center",
   },
-  amountValue: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#ffffff",
-  },
-  tokenText: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#ffffff",
-  },
-  addressText: {
-    fontFamily: "monospace",
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
-    textAlign: "center",
-    flexWrap: "wrap",
-  },
-  memoText: {
-    fontSize: 14,
-    color: "#d1d5db",
-    textAlign: "center",
-    fontStyle: "italic",
-  },
-  payAmountText: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#ffffff",
-    textAlign: "center",
-  },
-  modalFooter: {
-    flexDirection: "column",
-    gap: 12,
+  card: {
+    backgroundColor: CARD_BG,
+    borderRadius: 18,
+    padding: 24,
     width: "100%",
-    marginTop: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 5,
+    marginBottom: 32,
   },
-  confirmButton: {
-    backgroundColor: "#3b82f6",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+  amountRow: {
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 18,
+    justifyContent: "center",
   },
-  confirmButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
+  amountText: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: ACCENT,
+    letterSpacing: 1,
   },
-  cancelButton: {
-    backgroundColor: "#374151",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 18,
+    gap: 12,
+  },
+  userBox: {
+    flex: 1,
+    backgroundColor: "#26263a",
+    borderRadius: 12,
+    padding: 12,
     alignItems: "center",
-    marginBottom: 8,
+    marginHorizontal: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  cancelButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
+  userLabel: {
+    color: "#a1a1aa",
+    fontSize: 14,
     fontWeight: "600",
+    marginTop: 2,
+  },
+  userValue: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
+    marginTop: 2,
+    textAlign: "center",
+  },
+  infoBox: {
+    flex: 1,
+    backgroundColor: "#23232b",
+    borderRadius: 12,
+    padding: 12,
+    alignItems: "center",
+    marginHorizontal: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  infoLabel: {
+    color: "#a1a1aa",
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  infoValue: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "500",
+    marginTop: 2,
+    textAlign: "center",
+  },
+  memoBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#23232b",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 18,
+    marginTop: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  memoLabel: {
+    color: "#a1a1aa",
+    fontSize: 13,
+    fontWeight: "600",
+    marginRight: 8,
+    marginTop: 2,
+  },
+  memoValue: {
+    color: "#d1d5db",
+    fontSize: 15,
+    fontStyle: "italic",
+    fontWeight: "400",
+    flex: 1,
+    marginTop: 2,
+  },
+  attachmentsBox: {
+    marginBottom: 18,
+    marginTop: 6,
+  },
+  attachmentsLabel: {
+    color: "#a1a1aa",
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 8,
   },
   attachmentItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#374151",
+    backgroundColor: "#23232b",
     borderRadius: 8,
-    padding: 12,
+    padding: 10,
     marginBottom: 8,
     gap: 8,
   },
   attachmentText: {
     flex: 1,
-    color: "#ffffff",
+    color: ACCENT,
     fontSize: 14,
+    textDecorationLine: "underline",
+    fontWeight: "500",
   },
   attachmentSize: {
     color: "#a1a1aa",
     fontSize: 12,
+    marginLeft: 4,
+  },
+  balanceBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#23232b",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    marginTop: 8,
+    justifyContent: "center",
+  },
+  balanceLabel: {
+    color: "#a1a1aa",
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 4,
+    marginRight: 8,
+  },
+  balanceValue: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
+    marginLeft: 4,
+    marginRight: 8,
+  },
+  refreshButton: {
+    marginLeft: 8,
+    backgroundColor: "#23232b",
+  },
+  balanceWarning: {
+    color: ERROR,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: "center",
+    fontWeight: "600",
+  },
+  footerRow: {
+    flexDirection: "column",
+    gap: 14,
+    width: "100%",
+    marginTop: 24,
+    alignItems: "stretch",
+  },
+  confirmButton: {
+    backgroundColor: ACCENT,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 4,
+    shadowColor: ACCENT,
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  confirmButtonDisabled: {
+    backgroundColor: "#6b7280",
+    opacity: 0.7,
+  },
+  confirmButtonText: {
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
   denyButton: {
-    backgroundColor: "#ef4444",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+    backgroundColor: ERROR,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 4,
+    shadowColor: ERROR,
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
   denyButtonText: {
     color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  cancelButton: {
+    backgroundColor: "#374151",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 4,
+    shadowColor: "#374151",
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cancelButtonText: {
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  backButton: {
+    backgroundColor: ACCENT,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    marginTop: 24,
+  },
+  backButtonText: {
+    color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+    textAlign: "center",
   },
 });

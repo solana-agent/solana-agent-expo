@@ -20,6 +20,9 @@ export default function AccountScreen() {
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
+  const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
+  const [loadingBalance, setLoadingBalance] = useState(false);
+
   const walletAddress =
     wallet?.wallets && wallet.wallets.length > 0 && wallet.wallets[0]?.address
       ? wallet.wallets[0]?.address
@@ -92,6 +95,37 @@ export default function AccountScreen() {
 
     registerPushNotifications();
   }, [user, walletAddress, getAccessToken]);
+
+  useEffect(() => {
+    if (user && walletAddress) {
+      fetchUsdcBalance();
+    }
+  }, [user, walletAddress]);
+
+  const fetchUsdcBalance = async () => {
+    try {
+      setLoadingBalance(true);
+      const accessToken = await getAccessToken();
+      if (!accessToken || !walletAddress) return;
+      const response = await fetch(`${API_URL}/wallet/balance?wallet_address=${walletAddress}&token=USDC`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUsdcBalance(data.balance);
+      } else {
+        setUsdcBalance(null);
+      }
+    } catch (error) {
+      setUsdcBalance(null);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
 
   // Handle logout with store clearing
   const handleLogout = async () => {
@@ -282,6 +316,29 @@ export default function AccountScreen() {
                   Remove Avatar
                 </Button>
               )}
+            </View>
+
+            {/* USDC Balance Section */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.addressLabel}>USDC Balance</Text>
+              <View style={styles.addressContainer}>
+                <View style={styles.addressBox}>
+                  {loadingBalance ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.addressText}>
+                      {usdcBalance !== null ? `${Number(usdcBalance).toFixed(2)} USDC` : '—'}
+                    </Text>
+                  )}
+                </View>
+                <IconButton
+                  icon="refresh"
+                  iconColor="#3b82f6"
+                  size={24}
+                  onPress={fetchUsdcBalance}
+                  style={styles.copyButton}
+                />
+              </View>
             </View>
 
             {/* Display Name Section */}
