@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert, TouchableOpacity, ScrollView, FlatList } from 'react-native';
+import { View, StyleSheet, Alert, TouchableOpacity, ScrollView, FlatList, Linking } from 'react-native';
 import { Text, Appbar, TextInput, Button, Menu, ActivityIndicator, SegmentedButtons, Card, IconButton, List } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -104,7 +104,7 @@ function getStatusIcon(status: string): string {
     }
 }
 
-function PayeeSearch({ onSelect, onClose }: { onSelect: (user: any) => void, onClose: () => void }) {
+function PayerSearch({ onSelect, onClose }: { onSelect: (user: any) => void, onClose: () => void }) {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
@@ -197,6 +197,7 @@ export default function PaymentLinksScreen() {
     const [externalId, setExternalId] = useState('');
     const [attachedFiles, setAttachedFiles] = useState<any[]>([]);
     const [generatedLink, setGeneratedLink] = useState('');
+    const [memo, setMemo] = useState('');
 
     // Created links state
     const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
@@ -390,17 +391,21 @@ export default function PaymentLinksScreen() {
             let response;
             const formData = new FormData();
 
-            formData.append('payee', selectedUser.id);
-            formData.append('payer', username);
+            formData.append('payer', selectedUser.id);
+            formData.append('payee', username);
             formData.append('amount', amount);
             formData.append('token', 'USDC'); // Assuming USDC is the only token for now
             formData.append('dueDate', Math.floor(dueDate.getTime() / 1000).toString());
 
+            if (memo) {
+                formData.append('memo', memo);
+            } else {
+                formData.append('memo', `Payment request from ${username} to ${selectedUser.name || selectedUser.id}`);
+            }
+
             if (externalId) {
                 formData.append('externalId', externalId);
             }
-
-            formData.append('memo', `Payment request from ${username} to ${selectedUser.name || selectedUser.id}`);
 
             attachedFiles.forEach((file, index) => {
                 formData.append(`attachments`, {
@@ -432,6 +437,7 @@ export default function PaymentLinksScreen() {
             // Clear all form fields except the generated link
             setSelectedUser(null);
             setAmount('');
+            setMemo('');
             setDueDate(new Date());
             setExternalId('');
             setAttachedFiles([]);
@@ -638,76 +644,94 @@ export default function PaymentLinksScreen() {
         setGeneratedLink('');
     };
 
-    const handleRequestPress = (request: PaymentRequest) => {
-        // Navigate to detailed view - you can create this later
-        Alert.alert(
-            'Payment Request Details',
-            `Amount: ${request.amount} USDC\nStatus: ${request.status}\nType: ${request.type}\nDue: ${new Date(request.dueDate * 1000).toLocaleDateString()}`
-        );
-    };
-
     const renderPaymentRequestCard = ({ item }: { item: PaymentRequest }) => {
         const isPayer = item.payer === username;
         const isPayee = item.payee === username;
 
         const cardContent = (
-            <TouchableOpacity onPress={() => handleRequestPress(item)}>
-                <Card style={styles.requestCard}>
-                    <Card.Content>
-                        {/* Header: Amount, Type, Status */}
-                        <View style={styles.requestHeader}>
-                            <View style={styles.requestAmount}>
-                                <Text style={styles.amountText}>
-                                    {item.amount} USDC
-                                </Text>
-                                <Text style={styles.tokenText}>USDC</Text>
+            <Card style={styles.requestCard}>
+                <Card.Content>
+                    {/* Header: Amount, Type, Status */}
+                    <View style={styles.requestHeader}>
+                        <View style={styles.requestAmount}>
+                            <Text style={styles.amountText}>
+                                {item.amount} USDC
+                            </Text>
+                            <Text style={styles.tokenText}>USDC</Text>
+                        </View>
+                        <View style={styles.requestBadges}>
+                            <View style={[
+                                styles.typeBadge,
+                                { backgroundColor: item.type === 'AR' ? '#3b82f6' : '#f59e0b' }
+                            ]}>
+                                <Text style={styles.badgeText}>{item.type}</Text>
                             </View>
-                            <View style={styles.requestBadges}>
-                                {/* Type badge */}
-                                <View style={[
-                                    styles.typeBadge,
-                                    { backgroundColor: item.type === 'AR' ? '#3b82f6' : '#f59e0b' }
-                                ]}>
-                                    <Text style={styles.badgeText}>{item.type}</Text>
-                                </View>
-                                {/* Status badge */}
-                                <View style={[
-                                    styles.statusBadge,
-                                    { backgroundColor: getStatusColor(item.status) }
-                                ]}>
-                                    <Icon name={getStatusIcon(item.status)} size={12} color="#fff" />
-                                    <Text style={styles.badgeText}>{item.status}</Text>
-                                </View>
+                            <View style={[
+                                styles.statusBadge,
+                                { backgroundColor: getStatusColor(item.status) }
+                            ]}>
+                                <Icon name={getStatusIcon(item.status)} size={14} color="#fff" />
+                                <Text style={styles.badgeText}>{item.status}</Text>
                             </View>
                         </View>
+                    </View>
 
-                        {/* Info: Payee/Payer and Due Date */}
-                        <View style={styles.requestInfo}>
-                            <Text style={styles.requestLabel}>
-                                {item.type === 'AR' ? 'Payee:' : 'Payer:'} {item.type === 'AR' ? item.payee : item.payer}
-                            </Text>
-                            <Text style={styles.requestDate}>
-                                Due: {new Date(item.dueDate * 1000).toLocaleDateString()}
-                            </Text>
+                    {/* Payee and Payer */}
+                    <View style={styles.requestInfo}>
+                        <Text style={styles.requestLabel}>Payee: {item.payee}</Text>
+                        <Text style={styles.requestLabel}>Payer: {item.payer}</Text>
+                        <Text style={styles.requestDate}>
+                            Due: {new Date(item.dueDate * 1000).toLocaleDateString()}
+                        </Text>
+                    </View>
+
+                    {/* Memo/Description */}
+                    {item.memo && (
+                        <Text style={{ color: '#d1d5db', fontSize: 14, fontStyle: 'italic', marginBottom: 4 }}>
+                            {item.memo}
+                        </Text>
+                    )}
+
+                    {/* External ID */}
+                    {item.externalId && (
+                        <Text style={styles.externalId}>ID: {item.externalId}</Text>
+                    )}
+
+                    {/* Attachments */}
+                    {item.attachments && item.attachments.length > 0 && (
+                        <View style={styles.attachmentSection}>
+                            <Text style={styles.attachmentTitle}>Attachments:</Text>
+                            {item.attachments.map((att, idx) => (
+                                <TouchableOpacity
+                                    key={att.id || idx}
+                                    style={styles.attachmentItem}
+                                    onPress={() => att.url && Linking.openURL(att.url)}
+                                >
+                                    <Icon name="file-pdf-box" size={18} color="#ef4444" style={{ marginRight: 8 }} />
+                                    <Text style={styles.attachmentText} numberOfLines={1}>
+                                        {att.filename || 'Attachment'}
+                                    </Text>
+                                    {att.size ? (
+                                        <Text style={styles.attachmentSize}>
+                                            {(att.size / (1024 * 1024)).toFixed(1)} MB
+                                        </Text>
+                                    ) : null}
+                                    <Icon name="open-in-new" size={14} color="#a1a1aa" style={{ marginLeft: 6 }} />
+                                </TouchableOpacity>
+                            ))}
                         </View>
+                    )}
 
-                        {/* External ID */}
-                        {item.externalId && (
-                            <Text style={styles.externalId}>ID: {item.externalId}</Text>
-                        )}
-
-                        {/* Fee info */}
-                        {item.fee_percent > 0 && (
-                            <Text style={{ color: '#a1a1aa', fontSize: 12, marginTop: 4 }}>
-                                Fee: {item.fee_percent}% ({item.fee_total} USDC)
-                            </Text>
-                        )}
-                    </Card.Content>
-                </Card>
-            </TouchableOpacity>
+                    {/* Fee info */}
+                    {item.fee_percent > 0 && (
+                        <Text style={{ color: '#a1a1aa', fontSize: 12, marginTop: 6 }}>
+                            Fee: {item.fee_percent}% ({item.fee_total} USDC)
+                        </Text>
+                    )}
+                </Card.Content>
+            </Card>
         );
 
-        // Only allow swipe for payer or payee
         if (isPayer || isPayee) {
             return (
                 <Swipeable renderRightActions={() => renderRightActions(item)}>
@@ -763,8 +787,8 @@ export default function PaymentLinksScreen() {
             {selectedTab === 'create' ? (
                 showUserSearch ? (
                     <View style={[styles.content, { flex: 1 }]}>
-                        <Text style={styles.sectionTitle}>Select Payee</Text>
-                        <PayeeSearch onSelect={handleUserSelect} onClose={() => setShowUserSearch(false)} />
+                        <Text style={styles.sectionTitle}>Select Payer</Text>
+                        <PayerSearch onSelect={handleUserSelect} onClose={() => setShowUserSearch(false)} />
                     </View>
                 ) : (
                     <ScrollView
@@ -783,7 +807,7 @@ export default function PaymentLinksScreen() {
                         >
                             {/* Payee Selection */}
                             <View style={styles.section}>
-                                <Text style={styles.label}>To (Payee) *</Text>
+                                <Text style={styles.label}>From (Payer) *</Text>
                                 {selectedUser ? (
                                     <TouchableOpacity
                                         style={styles.selectedUser}
@@ -851,6 +875,28 @@ export default function PaymentLinksScreen() {
                                         <Icon name="clock" size={20} color="#a1a1aa" />
                                     </TouchableOpacity>
                                 </View>
+                            </View>
+
+                            {/* Description (Memo) */}
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Description</Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    value={memo}
+                                    onChangeText={setMemo}
+                                    placeholder="What is this invoice for?"
+                                    mode="outlined"
+                                    theme={{
+                                        colors: {
+                                            primary: '#3b82f6',
+                                            background: DARK_CARD,
+                                            surface: DARK_CARD,
+                                            outline: DARK_BORDER,
+                                            onSurface: '#ffffff',
+                                            placeholder: '#a1a1aa',
+                                        },
+                                    }}
+                                />
                             </View>
 
                             {/* External ID */}
@@ -1088,72 +1134,121 @@ const styles = StyleSheet.create({
     },
     requestCard: {
         backgroundColor: DARK_CARD,
-        marginBottom: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: DARK_BORDER,
+        marginBottom: 16,
+        borderRadius: 16,
+        borderWidth: 0,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
+        padding: 0,
     },
     requestHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 12,
+        marginBottom: 10,
     },
     requestAmount: {
         flex: 1,
+        justifyContent: 'center',
     },
     amountText: {
-        color: '#ffffff',
-        fontSize: 18,
-        fontWeight: '600',
+        color: '#fff',
+        fontSize: 22,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
     },
     tokenText: {
         color: '#a1a1aa',
-        fontSize: 14,
+        fontSize: 13,
         marginTop: 2,
+        fontWeight: '500',
     },
     requestBadges: {
         flexDirection: 'row',
         gap: 8,
+        alignItems: 'center',
     },
     typeBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 8,
+        paddingHorizontal: 10,
         paddingVertical: 4,
-        borderRadius: 12,
+        borderRadius: 16,
+        backgroundColor: '#3b82f6',
+        marginRight: 4,
     },
     statusBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 8,
+        paddingHorizontal: 10,
         paddingVertical: 4,
-        borderRadius: 12,
+        borderRadius: 16,
         gap: 4,
     },
     badgeText: {
-        color: '#ffffff',
-        fontSize: 12,
-        fontWeight: '500',
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '600',
         textTransform: 'capitalize',
+        marginLeft: 4,
     },
     requestInfo: {
         marginBottom: 8,
+        marginTop: 2,
+        paddingLeft: 2,
     },
     requestLabel: {
-        color: '#a1a1aa',
-        fontSize: 14,
-        marginBottom: 4,
+        color: '#e5e7eb',
+        fontSize: 15,
+        marginBottom: 2,
+        fontWeight: '500',
     },
     requestDate: {
         color: '#a1a1aa',
         fontSize: 14,
+        marginTop: 2,
     },
     externalId: {
         color: '#71717a',
         fontSize: 12,
         fontFamily: 'monospace',
-        marginTop: 4,
+        marginTop: 6,
+        marginBottom: 2,
+    },
+    attachmentSection: {
+        marginTop: 10,
+        marginBottom: 2,
+    },
+    attachmentTitle: {
+        color: '#a1a1aa',
+        fontSize: 13,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    attachmentItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#23232b',
+        borderRadius: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        marginBottom: 6,
+        marginRight: 8,
+    },
+    attachmentText: {
+        flex: 1,
+        color: '#3b82f6',
+        fontSize: 14,
+        textDecorationLine: 'underline',
+        fontWeight: '500',
+    },
+    attachmentSize: {
+        color: '#a1a1aa',
+        fontSize: 12,
+        marginLeft: 8,
     },
     section: {
         marginTop: 24,

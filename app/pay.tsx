@@ -215,9 +215,17 @@ export default function PayScreen() {
 
           {/* Requesting User Section */}
           <View style={styles.infoSection}>
-            <Text style={styles.infoLabel}>Requesting Payment</Text>
+            <Text style={styles.infoLabel}>Payee</Text>
             <Text style={styles.addressText}>
-              {payment.to || payment.payer}
+              {payment.payee}
+            </Text>
+          </View>
+
+          {/* Requesting User Section */}
+          <View style={styles.infoSection}>
+            <Text style={styles.infoLabel}>Payer</Text>
+            <Text style={styles.addressText}>
+              {payment.payer}
             </Text>
           </View>
 
