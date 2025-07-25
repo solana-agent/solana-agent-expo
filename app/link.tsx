@@ -215,6 +215,26 @@ export default function PaymentLinksScreen() {
     const [formExpanded, setFormExpanded] = useState(true);
     const scrollViewRef = useRef<ScrollView>(null);
 
+    // pagination
+    const [page, setPage] = useState(1);
+    const [pageSize] = useState(20);
+    const [hasMore, setHasMore] = useState(true);
+
+    // Reset pagination when switching to "created" tab
+    useEffect(() => {
+        if (selectedTab === 'created') {
+            setPage(1);
+            setHasMore(true);
+            loadPaymentRequests(1);
+        }
+    }, [selectedTab]);
+
+    // Handler for FlatList's onEndReached
+    const handleLoadMore = () => {
+        if (!loadingRequests && hasMore) {
+            loadPaymentRequests(page + 1);
+        }
+    };
 
     // Load payment requests when switching to Created tab
     useEffect(() => {
@@ -223,41 +243,51 @@ export default function PaymentLinksScreen() {
         }
     }, [selectedTab]);
 
-    // Update the loadPaymentRequests function to calculate metrics
-    // Update the loadPaymentRequests function to use preferred currency in API call
-    const loadPaymentRequests = async () => {
+    const loadPaymentRequests = async (pageToLoad = 1) => {
         try {
             setLoadingRequests(true);
             const accessToken = await getAccessToken();
             if (!accessToken) return;
 
-            // Add currency parameter to the API request
-            const response = await fetch(`${API_URL}/payment/requests?currency=${preferredCurrency}`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-            });
+            const response = await fetch(
+                `${API_URL}/payment/requests?page=${pageToLoad}&page_size=${pageSize}`,
+                {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
 
             if (response.ok) {
                 const data = await response.json();
                 const requests = data.requests || [];
-                setPaymentRequests(requests);
 
-                // The API should now return metrics already converted to preferred currency
-                if (data.metrics) {
+                if (pageToLoad === 1) {
+                    setPaymentRequests(requests);
+                } else {
+                    // Avoid duplicates by id
+                    setPaymentRequests(prev => {
+                        const ids = new Set(prev.map(r => r.id));
+                        const newRequests = requests.filter((r: any) => !ids.has(r.id));
+                        return [...prev, ...newRequests];
+                    });
+                }
+
+                setHasMore(requests.length === pageSize);
+                setPage(pageToLoad);
+
+                // Metrics only on first page
+                if (pageToLoad === 1 && data.metrics) {
                     setMonthlyMetrics({
                         revenue: data.metrics.revenue,
                         expenses: data.metrics.expenses,
                         cashFlow: data.metrics.cashFlow,
                     });
-                } else {
-                    // Fallback: calculate metrics locally (but amounts won't be converted)
+                } else if (pageToLoad === 1) {
                     const metrics = calculateMonthlyMetrics(requests);
-                    setMonthlyMetrics({
-                        ...metrics,
-                    });
+                    setMonthlyMetrics({ ...metrics });
                 }
             }
         } catch (error) {
@@ -426,6 +456,45 @@ export default function PaymentLinksScreen() {
         }
     };
 
+    const handleCancelRequest = async (item: PaymentRequest) => {
+        Alert.alert(
+            'Cancel Payment Request',
+            'Are you sure you want to cancel this payment request?',
+            [
+                { text: 'No', style: 'cancel' },
+                {
+                    text: 'Cancel Request',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setLoadingRequests(true);
+                            const accessToken = await getAccessToken();
+                            if (!accessToken) throw new Error('No access token available');
+                            const response = await fetch(`${API_URL}/payment/request/${item.id}/cancel`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${accessToken}`,
+                                    'Content-Type': 'application/json',
+                                },
+                            });
+                            if (!response.ok) {
+                                const errorData = await response.json();
+                                throw new Error(errorData.message || 'Failed to cancel payment request');
+                            }
+                            Alert.alert('Request Cancelled', 'The payment request has been cancelled.');
+                            loadPaymentRequests();
+                        } catch (error) {
+                            console.error('Error cancelling payment request:', error);
+                            Alert.alert('Error', `Failed to cancel payment request: ${error}`);
+                        } finally {
+                            setLoadingRequests(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const handleAcceptPayment = async (item: PaymentRequest) => {
         try {
             setLoadingRequests(true);
@@ -498,10 +567,13 @@ export default function PaymentLinksScreen() {
     };
 
     // Swipe actions for each card
-    const renderRightActions = (item: PaymentRequest) => (
-        <View style={{ flexDirection: 'row', height: '100%' }}>
-            {item.status === 'outstanding' && (
-                <>
+    const renderRightActions = (item: PaymentRequest) => {
+        // Only show Accept/Deny for payer, Cancel for payee, only if outstanding
+        if (item.status !== 'outstanding') return null;
+
+        if (item.payer === username) {
+            return (
+                <View style={{ flexDirection: 'row', height: '100%' }}>
                     <TouchableOpacity
                         style={{
                             backgroundColor: '#10b981',
@@ -526,10 +598,28 @@ export default function PaymentLinksScreen() {
                         <Icon name="close" size={28} color="#fff" />
                         <Text style={{ color: '#fff', fontWeight: 'bold' }}>Deny</Text>
                     </TouchableOpacity>
-                </>
-            )}
-        </View>
-    );
+                </View>
+            );
+        } else if (item.payee === username) {
+            return (
+                <View style={{ flexDirection: 'row', height: '100%' }}>
+                    <TouchableOpacity
+                        style={{
+                            backgroundColor: '#ef4444',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            width: 80,
+                        }}
+                        onPress={() => handleCancelRequest(item)}
+                    >
+                        <Icon name="cancel" size={28} color="#fff" />
+                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cancel</Text>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+        return null;
+    };
 
     // In your copyLink function:
     const copyLink = async () => {
@@ -556,11 +646,15 @@ export default function PaymentLinksScreen() {
         );
     };
 
-    const renderPaymentRequestCard = ({ item }: { item: PaymentRequest }) => (
-        <Swipeable renderRightActions={() => renderRightActions(item)}>
+    const renderPaymentRequestCard = ({ item }: { item: PaymentRequest }) => {
+        const isPayer = item.payer === username;
+        const isPayee = item.payee === username;
+
+        const cardContent = (
             <TouchableOpacity onPress={() => handleRequestPress(item)}>
                 <Card style={styles.requestCard}>
                     <Card.Content>
+                        {/* Header: Amount, Type, Status */}
                         <View style={styles.requestHeader}>
                             <View style={styles.requestAmount}>
                                 <Text style={styles.amountText}>
@@ -569,16 +663,25 @@ export default function PaymentLinksScreen() {
                                 <Text style={styles.tokenText}>USDC</Text>
                             </View>
                             <View style={styles.requestBadges}>
-                                <View style={[styles.typeBadge, { backgroundColor: item.type === 'AR' ? '#3b82f6' : '#f59e0b' }]}>
+                                {/* Type badge */}
+                                <View style={[
+                                    styles.typeBadge,
+                                    { backgroundColor: item.type === 'AR' ? '#3b82f6' : '#f59e0b' }
+                                ]}>
                                     <Text style={styles.badgeText}>{item.type}</Text>
                                 </View>
-                                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+                                {/* Status badge */}
+                                <View style={[
+                                    styles.statusBadge,
+                                    { backgroundColor: getStatusColor(item.status) }
+                                ]}>
                                     <Icon name={getStatusIcon(item.status)} size={12} color="#fff" />
                                     <Text style={styles.badgeText}>{item.status}</Text>
                                 </View>
                             </View>
                         </View>
 
+                        {/* Info: Payee/Payer and Due Date */}
                         <View style={styles.requestInfo}>
                             <Text style={styles.requestLabel}>
                                 {item.type === 'AR' ? 'Payee:' : 'Payer:'} {item.type === 'AR' ? item.payee : item.payer}
@@ -588,28 +691,32 @@ export default function PaymentLinksScreen() {
                             </Text>
                         </View>
 
+                        {/* External ID */}
                         {item.externalId && (
                             <Text style={styles.externalId}>ID: {item.externalId}</Text>
+                        )}
+
+                        {/* Fee info */}
+                        {item.fee_percent > 0 && (
+                            <Text style={{ color: '#a1a1aa', fontSize: 12, marginTop: 4 }}>
+                                Fee: {item.fee_percent}% ({item.fee_total} USDC)
+                            </Text>
                         )}
                     </Card.Content>
                 </Card>
             </TouchableOpacity>
-        </Swipeable>
-    );
-
-    if (!username) {
-        return (
-            <View style={styles.container}>
-                <Appbar.Header style={styles.header}>
-                    <Appbar.BackAction iconColor="#fff" onPress={() => router.back()} />
-                    <Appbar.Content title="Payment Links" titleStyle={styles.headerTitle} />
-                </Appbar.Header>
-                <View style={styles.centerContent}>
-                    <Text style={styles.loginMessage}>Please login to create payment links</Text>
-                </View>
-            </View>
         );
-    }
+
+        // Only allow swipe for payer or payee
+        if (isPayer || isPayee) {
+            return (
+                <Swipeable renderRightActions={() => renderRightActions(item)}>
+                    {cardContent}
+                </Swipeable>
+            );
+        }
+        return cardContent;
+    };
 
     return (
         <View style={styles.container}>
@@ -620,7 +727,7 @@ export default function PaymentLinksScreen() {
                     <Appbar.Action icon="refresh" iconColor="#fff" onPress={resetForm} />
                 )}
                 {selectedTab === 'created' && (
-                    <Appbar.Action icon="refresh" iconColor="#fff" onPress={loadPaymentRequests} />
+                    <Appbar.Action icon="refresh" iconColor="#fff" onPress={() => loadPaymentRequests(1)} />
                 )}
             </Appbar.Header>
 
@@ -876,9 +983,23 @@ export default function PaymentLinksScreen() {
                             <Text style={styles.emptySubtext}>Create your first payment link to get started</Text>
                         </View>
                     }
-                    ListFooterComponent={<View style={{ height: 48 }} />}
-                    refreshing={loadingRequests}
-                    onRefresh={loadPaymentRequests}
+                    ListFooterComponent={
+                        loadingRequests && hasMore ? (
+                            <View style={{ padding: 16 }}>
+                                <ActivityIndicator color="#3b82f6" />
+                            </View>
+                        ) : (
+                            <View style={{ height: 48 }} />
+                        )
+                    }
+                    refreshing={loadingRequests && page === 1}
+                    onRefresh={() => {
+                        setPage(1);
+                        setHasMore(true);
+                        loadPaymentRequests(1);
+                    }}
+                    onEndReached={handleLoadMore}
+                    onEndReachedThreshold={0.5}
                 />
             )}
 

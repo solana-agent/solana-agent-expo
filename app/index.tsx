@@ -147,10 +147,15 @@ function InfiniteScrollChat({
           setFetchError(true);
           return;
         }
-        setChatHistory((prev) => ({
-          ...data,
-          data: [...prev.data, ...data.data],
-        }));
+        setChatHistory((prev) => {
+          // Remove duplicates by id
+          const ids = new Set(prev.data.map((m) => m.id));
+          const newData = data.data.filter((m: any) => !ids.has(m.id));
+          return {
+            ...data,
+            data: [...prev.data, ...newData],
+          };
+        });
         setAllDataFetched(data.page >= data.total_pages);
         setInitialFetchDone(true);
       } catch (error) {

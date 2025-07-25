@@ -31,7 +31,7 @@ type PaymentRequest = {
   }>;
   human?: string;
   to?: string;
-  live_token_amount: number;
+  total_amount: number;
   fee_percent: number;
   fee_total: number;
 };
@@ -287,24 +287,21 @@ export default function PayScreen() {
             </View>
           )}
 
+          {/* Fee section */}
+          <View style={styles.infoSection}>
+            <Text style={styles.infoLabel}>Fee</Text>
+            <Text style={styles.payAmountText}>
+              {payment.fee_percent}% ({payment.fee_total} USDC)
+            </Text>
+          </View>
+
           {/* You will pay section */}
           <View style={styles.infoSection}>
             <Text style={styles.infoLabel}>You will pay</Text>
             <Text style={styles.payAmountText}>
-              ≈ {payment.live_token_amount} USDC
+              {payment.total_amount} USDC
             </Text>
           </View>
-        </View>
-
-        {/* Fee section */}
-        <View style={styles.infoSection}>
-          <Text style={styles.infoLabel}>Fee</Text>
-          <Text style={styles.payAmountText}>
-            {payment.fee_percent}% ({payment.fee_total} USDC)
-          </Text>
-          <Text style={{ color: "#a1a1aa", fontSize: 12, textAlign: "center" }}>
-            The fee is additional to the amount you will pay.
-          </Text>
         </View>
 
         {/* Footer Buttons */}
