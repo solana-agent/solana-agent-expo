@@ -25,6 +25,8 @@ export default function ChannelScreen() {
     const [isBlocked, setIsBlocked] = useState(false);
 
     useEffect(() => {
+        setError('');
+        setLoading(true);
         const loadChannel = async () => {
             try {
                 if (!client || !cid) {
