@@ -13,7 +13,7 @@ import { StatusBar } from "expo-status-bar";
 import { Provider as PaperProvider, Appbar } from "react-native-paper";
 import { PrivyProvider } from '@privy-io/expo';
 import { PrivyElements } from '@privy-io/expo/ui';
-import { OverlayProvider, Chat, ChannelPreview } from "stream-chat-expo";
+import { OverlayProvider, Chat, ChannelPreview, InlineUnreadIndicator } from "stream-chat-expo";
 import { Tabs } from 'expo-router';
 import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
@@ -22,6 +22,7 @@ import * as Notifications from 'expo-notifications';
 import { NotificationService } from '../components/NotificationService';
 import { chatClient } from '../config/chatConfig';
 import { useAppStore } from './store/Store';
+import { channel } from 'diagnostics_channel';
 global.Buffer = Buffer;
 
 const DARK_BG = "#18181b";
@@ -108,19 +109,21 @@ const streamChatTheme = {
       backgroundColor: '#18181b',
     },
   },
-  channelPreview: {
-    unreadContainer: {
-      backgroundColor: "#27272a",
-      borderRadius: 8,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-    },
-    unreadText: {
-      color: "#fff",
-      fontSize: 14,
-    },
+  messageList: {
     container: {
-      backgroundColor: "#18181b",
+      backgroundColor: '#18181b',
+    },
+    inlineUnreadIndicator: {
+      container: {
+        backgroundColor: '#71717a',
+        borderRadius: 12,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+      },
+      text: {
+        color: '#ffffff',
+        fontSize: 12,
+      },
     },
   },
 };

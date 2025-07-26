@@ -181,6 +181,7 @@ export default function ChannelScreen() {
             <View style={{ flex: 1 }}>
                 <Channel
                     channel={channel}
+                    shouldShowUnreadUnderlay={false}
                 >
                     <MessageList />
                     <MessageInput />
