@@ -20,8 +20,11 @@ export default function AccountScreen() {
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
+  const [solBalance, setSolBalance] = useState<number | null>(null);
+  const [solUsd, setSolUsd] = useState<number | null>(null);
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
-  const [loadingBalance, setLoadingBalance] = useState(false);
+  const [usdcUsd, setUsdcUsd] = useState<number | null>(null);
+  const [loadingBalances, setLoadingBalances] = useState(false);
 
   const walletAddress =
     wallet?.wallets && wallet.wallets.length > 0 && wallet.wallets[0]?.address
@@ -98,32 +101,44 @@ export default function AccountScreen() {
 
   useEffect(() => {
     if (user && walletAddress) {
-      fetchUsdcBalance();
+      fetchWalletBalances();
     }
   }, [user, walletAddress]);
 
-  const fetchUsdcBalance = async () => {
+  const fetchWalletBalances = async () => {
     try {
-      setLoadingBalance(true);
+      setLoadingBalances(true);
       const accessToken = await getAccessToken();
       if (!accessToken || !walletAddress) return;
-      const response = await fetch(`${API_URL}/wallet/balance?wallet_address=${walletAddress}&token=USDC`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await fetch(
+        `${API_URL}/wallet/balances?wallet_address=${walletAddress}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
       if (response.ok) {
         const data = await response.json();
-        setUsdcBalance(data.balance);
+        setSolBalance(data.SOL?.balance ?? 0);
+        setSolUsd(data.SOL?.valueUsd ?? 0);
+        setUsdcBalance(data.USDC?.balance ?? 0);
+        setUsdcUsd(data.USDC?.valueUsd ?? 0);
       } else {
+        setSolBalance(null);
+        setSolUsd(null);
         setUsdcBalance(null);
+        setUsdcUsd(null);
       }
     } catch (error) {
+      setSolBalance(null);
+      setSolUsd(null);
       setUsdcBalance(null);
+      setUsdcUsd(null);
     } finally {
-      setLoadingBalance(false);
+      setLoadingBalances(false);
     }
   };
 
@@ -285,7 +300,7 @@ export default function AccountScreen() {
                 ) : (
                   <View style={styles.defaultAvatar}>
                     <Text style={styles.avatarPlaceholder}>
-                      {username || '?'}
+                      {username?.charAt(0) || '?'}
                     </Text>
                   </View>
                 )}
@@ -318,16 +333,18 @@ export default function AccountScreen() {
               )}
             </View>
 
-            {/* USDC Balance Section */}
+            {/* SOL & USDC Balance Section */}
             <View style={styles.sectionContainer}>
-              <Text style={styles.addressLabel}>USDC Balance</Text>
+              <Text style={styles.addressLabel}>SOL Balance</Text>
               <View style={styles.addressContainer}>
                 <View style={styles.addressBox}>
-                  {loadingBalance ? (
+                  {loadingBalances ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <Text style={styles.addressText}>
-                      {usdcBalance !== null ? `${Number(usdcBalance).toFixed(2)} USDC` : '—'}
+                      {solBalance !== null
+                        ? `${Number(solBalance).toFixed(4)} SOL ($${Number(solUsd).toFixed(2)})`
+                        : '—'}
                     </Text>
                   )}
                 </View>
@@ -335,7 +352,30 @@ export default function AccountScreen() {
                   icon="refresh"
                   iconColor="#3b82f6"
                   size={24}
-                  onPress={fetchUsdcBalance}
+                  onPress={fetchWalletBalances}
+                  style={styles.copyButton}
+                />
+              </View>
+            </View>
+            <View style={styles.sectionContainer}>
+              <Text style={styles.addressLabel}>USDC Balance</Text>
+              <View style={styles.addressContainer}>
+                <View style={styles.addressBox}>
+                  {loadingBalances ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.addressText}>
+                      {usdcBalance !== null
+                        ? `${Number(usdcBalance).toFixed(2)} USDC ($${Number(usdcUsd).toFixed(2)})`
+                        : '—'}
+                    </Text>
+                  )}
+                </View>
+                <IconButton
+                  icon="refresh"
+                  iconColor="#3b82f6"
+                  size={24}
+                  onPress={fetchWalletBalances}
                   style={styles.copyButton}
                 />
               </View>

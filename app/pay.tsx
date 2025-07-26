@@ -48,14 +48,17 @@ export default function PayScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loadingPaymentRequest, setLoadingPaymentRequest] = useState(false);
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
-  const wallet = useEmbeddedSolanaWallet();
+  const [solBalance, setSolBalance] = useState<number | null>(null);
+  const [solUsd, setSolUsd] = useState<number | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
+  const wallet = useEmbeddedSolanaWallet();
 
   const walletAddress =
     wallet?.wallets && wallet.wallets.length > 0 && wallet.wallets[0]?.address
       ? wallet.wallets[0]?.address
       : null;
 
+  // Fetch payment and balances
   useFocusEffect(
     useCallback(() => {
       setPayment(null);
@@ -86,24 +89,8 @@ export default function PayScreen() {
           const data = await res.json();
           setPayment(data.request);
 
-          // Fetch USDC balance
-          try {
-            const balanceRes = await fetch(`${API_URL}/wallet/balance?wallet_address=${walletAddress}&token=USDC`, {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${jwt}`,
-                'Content-Type': 'application/json',
-              },
-            });
-            if (balanceRes.ok) {
-              const balanceData = await balanceRes.json();
-              setUsdcBalance(balanceData.balance); // expects { balance: number }
-            } else {
-              setUsdcBalance(null);
-            }
-          } catch {
-            setUsdcBalance(null);
-          }
+          // Fetch SOL & USDC balances
+          await fetchWalletBalances(jwt);
 
         } catch (e: any) {
           setError(e.message);
@@ -114,6 +101,41 @@ export default function PayScreen() {
       fetchPayment();
     }, [id, getAccessToken])
   );
+
+  // Fetch both balances
+  const fetchWalletBalances = async (jwtOverride?: string) => {
+    try {
+      setLoadingBalance(true);
+      const jwt = jwtOverride || await getAccessToken();
+      if (!jwt || !walletAddress) return;
+      const response = await fetch(
+        `${API_URL}/wallet/balances?wallet_address=${walletAddress}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${jwt}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setSolBalance(data.SOL?.balance ?? 0);
+        setSolUsd(data.SOL?.valueUsd ?? 0);
+        setUsdcBalance(data.USDC?.balance ?? 0);
+      } else {
+        setSolBalance(null);
+        setSolUsd(null);
+        setUsdcBalance(null);
+      }
+    } catch (error) {
+      setSolBalance(null);
+      setSolUsd(null);
+      setUsdcBalance(null);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
 
   const handleAcceptPayment = async () => {
     if (!payment?.id) return;
@@ -182,31 +204,6 @@ export default function PayScreen() {
     );
   };
 
-  const fetchUsdcBalance = async () => {
-    try {
-      setLoadingBalance(true);
-      const accessToken = await getAccessToken();
-      if (!accessToken || !walletAddress) return;
-      const response = await fetch(`${API_URL}/wallet/balance?wallet_address=${walletAddress}&token=USDC`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUsdcBalance(data.balance);
-      } else {
-        setUsdcBalance(null);
-      }
-    } catch (error) {
-      setUsdcBalance(null);
-    } finally {
-      setLoadingBalance(false);
-    }
-  };
-
   const handleCancelPayment = () => {
     router.back();
   };
@@ -224,6 +221,21 @@ export default function PayScreen() {
     return (
       <View style={styles.centerContent}>
         <Text style={{ color: ERROR, fontSize: 18 }}>{error || "Payment not found"}</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (payment && payment.status === "paid") {
+    return (
+      <View style={styles.centerContent}>
+        <Icon name="check-circle-outline" size={64} color={ACCENT} style={{ marginBottom: 24 }} />
+        <Text style={{ color: "#fff", fontSize: 24, fontWeight: "bold", marginBottom: 12 }}>Already Paid</Text>
+        <Text style={{ color: "#d1d5db", fontSize: 16, textAlign: "center", marginBottom: 32, paddingHorizontal: 24 }}>
+          This payment request has already been paid and cannot be paid again.
+        </Text>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
@@ -347,6 +359,23 @@ export default function PayScreen() {
             </View>
           </View>
 
+          {/* SOL Balance */}
+          <View style={styles.balanceBox}>
+            <Icon name="alpha-s-circle" size={22} color={ACCENT} style={{ marginRight: 8 }} />
+            <Text style={styles.balanceLabel}>Your SOL Balance</Text>
+            <Text style={styles.balanceValue}>
+              {solBalance !== null
+                ? `${Number(solBalance).toFixed(4)} SOL`
+                : 'Loading...'}
+            </Text>
+            <IconButton
+              icon="refresh"
+              iconColor={ACCENT}
+              size={22}
+              onPress={() => fetchWalletBalances()}
+              style={styles.refreshButton}
+            />
+          </View>
           {/* USDC Balance */}
           <View style={styles.balanceBox}>
             <Icon name="wallet" size={22} color={ACCENT} style={{ marginRight: 8 }} />
@@ -360,13 +389,18 @@ export default function PayScreen() {
               icon="refresh"
               iconColor={ACCENT}
               size={22}
-              onPress={fetchUsdcBalance}
+              onPress={() => fetchWalletBalances()}
               style={styles.refreshButton}
             />
           </View>
           {usdcBalance !== null && payment && usdcBalance < payment.total_amount && (
             <Text style={styles.balanceWarning}>
               <Icon name="alert-circle" size={16} color={ERROR} /> Insufficient USDC balance to pay this invoice.
+            </Text>
+          )}
+          {solBalance !== null && solBalance === 0 && (
+            <Text style={styles.balanceWarning}>
+              <Icon name="alert-circle" size={16} color={ERROR} /> Your SOL balance is zero. You may not be able to pay transaction fees.
             </Text>
           )}
 

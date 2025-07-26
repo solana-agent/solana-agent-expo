@@ -16,7 +16,6 @@ export default function ChannelScreen() {
     const { client } = useChatContext();
     const { cid } = useLocalSearchParams();
     const router = useRouter();
-    const { username } = useAppStore();
     const [channel, setChannel] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -38,7 +37,9 @@ export default function ChannelScreen() {
                 console.log('Loading channel with CID:', cid);
 
                 // Get the channel
-                const channelInstance = client.channel('messaging', cid as string);
+                const rawCid = Array.isArray(cid) ? cid[0] : cid;
+                const channelId = typeof rawCid === 'string' && rawCid.includes(':') ? rawCid.split(':')[1] : rawCid;
+                const channelInstance = client.channel('messaging', channelId);
                 await channelInstance.watch();
 
                 setChannel(channelInstance);

@@ -1387,6 +1387,7 @@ const styles = StyleSheet.create({
     },
     metricsSection: {
         marginBottom: 20,
+        marginTop: 16,
     },
     metricsHeader: {
         flexDirection: 'row',
