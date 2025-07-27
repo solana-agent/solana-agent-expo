@@ -7,7 +7,7 @@ import { Alert, Image, ScrollView, StyleSheet, TouchableOpacity, View } from "re
 import { ActivityIndicator, Appbar, Button, IconButton, Text, Menu } from "react-native-paper";
 import { useRouter } from "expo-router";
 import { PushNotificationService } from '../components/PushNotificationService';
-import { useAppStore } from './store/Store';
+import { useAppStore } from '../store/Store';
 import { disconnectChatUser } from "../config/chatConfig";
 
 const DARK_NAV = "#18181b";

@@ -6,7 +6,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useAppStore } from './store/Store';
+import { useAppStore } from '../store/Store';
 import Constants from 'expo-constants';
 import { usePrivy } from '@privy-io/expo';
 import { Swipeable } from 'react-native-gesture-handler';

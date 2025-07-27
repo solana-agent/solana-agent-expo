@@ -34,7 +34,7 @@ import {
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { BiometricService } from "../components/BiometricService";
 import { PushNotificationService } from '../components/PushNotificationService';
-import { useAppStore } from "./store/Store";
+import { useAppStore } from "../store/Store";
 import { UsernameSetup } from "../components/UsernameSetup";
 import {
   connectChatUser,
