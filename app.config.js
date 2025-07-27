@@ -2,7 +2,7 @@ export default {
   expo: {
     name: "Solana Agent",
     slug: "solana-agent",
-    version: "0.0.4",
+    version: "1.0.0",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     scheme: "agent",

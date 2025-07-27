@@ -775,7 +775,7 @@ export default function PaymentLinksScreen() {
                     style={styles.segmentedButtons}
                     theme={{
                         colors: {
-                            secondaryContainer: '#3b82f6',
+                            secondaryContainer: '#6d28d9',
                             onSecondaryContainer: '#ffffff',
                             outline: DARK_BORDER,
                         },
@@ -805,7 +805,7 @@ export default function PaymentLinksScreen() {
                             style={styles.metricsAccordion}
                             theme={{ colors: { background: DARK_CARD } }}
                         >
-                            {/* Payee Selection */}
+                            {/* Payer Selection */}
                             <View style={styles.section}>
                                 <Text style={styles.label}>From (Payer) *</Text>
                                 {selectedUser ? (
@@ -823,7 +823,7 @@ export default function PaymentLinksScreen() {
                                         style={styles.selectButton}
                                         onPress={() => setShowUserSearch(true)}
                                     >
-                                        <Text style={styles.selectButtonText}>Select Payee</Text>
+                                        <Text style={styles.selectButtonText}>Select Payer</Text>
                                         <Icon name="chevron-right" size={20} color="#a1a1aa" />
                                     </TouchableOpacity>
                                 )}
